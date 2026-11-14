@@ -17,6 +17,7 @@ app.get("/services", async (_request, response) => {
         const result = await pool.query(`SELECT
         s.id,
         s.service_type,
+        s.urgency,
         s.status,
         s.scheduled_at,
         s.completed_at,
@@ -52,6 +53,7 @@ app.get("/employees/:employeeId/services", async (request, response) => {
         const result = await pool.query(`SELECT
         s.id,
         s.service_type,
+        s.urgency,
         s.status,
         s.scheduled_at,
         s.completed_at,

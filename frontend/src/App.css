@@ -789,6 +789,32 @@
   gap: 8px;
 }
 
+.service-urgency {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #dfe6e0;
+  border-radius: 999px;
+  background: #edf5e6;
+  color: #397457;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.service-urgency.urgency-nujno {
+  border-color: #f0c8bd;
+  background: #fff0ed;
+  color: #a33f31;
+}
+
+.service-urgency.urgency-resno {
+  border-color: #efdcb2;
+  background: #fff7e5;
+  color: #8d6420;
+}
+
 .service-pin-button {
   display: inline-grid;
   width: 36px;

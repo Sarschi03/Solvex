@@ -12,6 +12,7 @@ type Employee = {
 type Service = {
   id: string
   service_type: string
+  urgency: 'nujno' | 'resno' | 'standardno'
   status: string
   scheduled_at: string | null
   completed_at: string | null
@@ -39,7 +40,8 @@ type ServiceReport = {
 }
 
 type DashboardPage = 'services' | 'reports'
-type ServiceSortOrder = 'newest' | 'oldest'
+type ServiceSortOrder = 'newest' | 'oldest' | 'urgent-first' | 'standard-first'
+type ReportSortOrder = 'newest' | 'oldest'
 
 const serviceTypeLabels: Record<string, string> = {
   cleaning: 'Čiščenje',
@@ -53,6 +55,18 @@ const serviceStatusLabels: Record<string, string> = {
   in_progress: 'V teku',
   completed: 'Zaključen',
   cancelled: 'Preklican',
+}
+
+const serviceUrgencyLabels: Record<Service['urgency'], string> = {
+  nujno: 'Nujno',
+  resno: 'Resno',
+  standardno: 'Standardno',
+}
+
+const serviceUrgencyRank: Record<Service['urgency'], number> = {
+  nujno: 0,
+  resno: 1,
+  standardno: 2,
 }
 
 function formatDate(value: string | null) {
@@ -85,7 +99,7 @@ function App() {
   const [serviceSearch, setServiceSearch] = useState('')
   const [serviceSortOrder, setServiceSortOrder] = useState<ServiceSortOrder>('newest')
   const [reportSearch, setReportSearch] = useState('')
-  const [reportSortOrder, setReportSortOrder] = useState<ServiceSortOrder>('newest')
+  const [reportSortOrder, setReportSortOrder] = useState<ReportSortOrder>('newest')
   const [pinnedServiceIds, setPinnedServiceIds] = useState<Set<string>>(() => new Set())
   const [servicePinNotice, setServicePinNotice] = useState('')
   const [selectedService, setSelectedService] = useState<Service | null>(null)
@@ -501,6 +515,7 @@ function App() {
       service.id,
       service.solar_plant_name,
       serviceTypeLabels[service.service_type] ?? service.service_type,
+      serviceUrgencyLabels[service.urgency],
       serviceStatusLabels[service.status] ?? service.status,
       service.installation_address,
       service.postal_code,
@@ -517,6 +532,11 @@ function App() {
       .includes(normalizedServiceSearch)
   })
   const sortedMatchingServices = [...matchingServices].sort((first, second) => {
+    if (serviceSortOrder === 'urgent-first' || serviceSortOrder === 'standard-first') {
+      const urgencyOrder = serviceUrgencyRank[first.urgency] - serviceUrgencyRank[second.urgency]
+      return serviceSortOrder === 'urgent-first' ? urgencyOrder : -urgencyOrder
+    }
+
     const idOrder =
       first.id.length === second.id.length
         ? first.id.localeCompare(second.id)
@@ -627,11 +647,21 @@ function App() {
                       value={serviceSortOrder}
                       onChange={(event) => {
                         const value = event.target.value
-                        setServiceSortOrder(value === 'oldest' ? 'oldest' : 'newest')
+                        if (
+                          value === 'oldest' ||
+                          value === 'urgent-first' ||
+                          value === 'standard-first'
+                        ) {
+                          setServiceSortOrder(value)
+                        } else {
+                          setServiceSortOrder('newest')
+                        }
                       }}
                     >
                       <option value="newest">Najnovejši</option>
                       <option value="oldest">Najstarejši</option>
+                      <option value="urgent-first">Nujno najprej</option>
+                      <option value="standard-first">Standardno najprej</option>
                     </select>
                   </label>
                 </div>
@@ -891,6 +921,14 @@ function App() {
                   </button>
                 </div>
                 <dl className="service-details modal-service-details">
+                  <div>
+                    <dt>Stopnja nujnosti</dt>
+                    <dd>
+                      <span className={`service-urgency urgency-${selectedService.urgency}`}>
+                        {serviceUrgencyLabels[selectedService.urgency]}
+                      </span>
+                    </dd>
+                  </div>
                   <div>
                     <dt>Stanje</dt>
                     <dd>{serviceStatusLabels[selectedService.status] ?? selectedService.status}</dd>

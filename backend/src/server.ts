@@ -22,6 +22,7 @@ app.get("/services", async (_request, response) => {
       `SELECT
         s.id,
         s.service_type,
+        s.urgency,
         s.status,
         s.scheduled_at,
         s.completed_at,
@@ -63,6 +64,7 @@ app.get("/employees/:employeeId/services", async (request, response) => {
       `SELECT
         s.id,
         s.service_type,
+        s.urgency,
         s.status,
         s.scheduled_at,
         s.completed_at,
