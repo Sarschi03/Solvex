@@ -114,10 +114,13 @@ app.get("/employees/:employeeId/service-reports", async (request, response) => {
         sr.findings,
         sr.recommendations,
         sr.reported_at,
-        sr.submitted_at
+        sr.submitted_at,
+        e.first_name AS employee_first_name,
+        e.last_name AS employee_last_name
       FROM service_reports sr
       JOIN services s ON s.id = sr.id_service
       JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+      JOIN employees e ON e.id = sr.id_employee
       WHERE sr.id_employee = $1
       ORDER BY sr.reported_at DESC, sr.id DESC`,
       [employeeId],
@@ -178,7 +181,7 @@ app.post("/employees/:employeeId/service-reports", async (request, response) => 
         FROM services s
         WHERE s.id = $1 AND s.id_employee = $2
         RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-          submitted_at
+          submitted_at, id_employee
       )
       SELECT
         ir.id,
@@ -189,10 +192,13 @@ app.post("/employees/:employeeId/service-reports", async (request, response) => 
         ir.findings,
         ir.recommendations,
         ir.reported_at,
-        ir.submitted_at
+        ir.submitted_at,
+        e.first_name AS employee_first_name,
+        e.last_name AS employee_last_name
       FROM inserted_report ir
       JOIN services s ON s.id = ir.id_service
-      JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant`,
+      JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+      JOIN employees e ON e.id = ir.id_employee`,
       [
         serviceId,
         employeeId,
@@ -273,7 +279,7 @@ app.put(
             reported_at = COALESCE($6::timestamptz, reported_at)
           WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
           RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-            submitted_at
+            submitted_at, id_employee
         )
         SELECT
           ur.id,
@@ -284,10 +290,13 @@ app.put(
           ur.findings,
           ur.recommendations,
           ur.reported_at,
-          ur.submitted_at
+          ur.submitted_at,
+          e.first_name AS employee_first_name,
+          e.last_name AS employee_last_name
         FROM updated_report ur
         JOIN services s ON s.id = ur.id_service
-        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant`,
+        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+        JOIN employees e ON e.id = ur.id_employee`,
         [
           reportId,
           employeeId,
@@ -351,7 +360,7 @@ app.post(
           SET submitted_at = NOW()
           WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
           RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-            submitted_at
+            submitted_at, id_employee
         )
         SELECT
           sr.id,
@@ -362,10 +371,13 @@ app.post(
           sr.findings,
           sr.recommendations,
           sr.reported_at,
-          sr.submitted_at
+          sr.submitted_at,
+          e.first_name AS employee_first_name,
+          e.last_name AS employee_last_name
         FROM submitted_report sr
         JOIN services s ON s.id = sr.id_service
-        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant`,
+        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+        JOIN employees e ON e.id = sr.id_employee`,
         [reportId, employeeId],
       );
 

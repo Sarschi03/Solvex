@@ -37,6 +37,8 @@ type ServiceReport = {
   recommendations: string | null
   reported_at: string
   submitted_at: string | null
+  employee_first_name: string
+  employee_last_name: string
 }
 
 type DashboardPage = 'services' | 'reports'
@@ -109,6 +111,7 @@ function App() {
   const [reports, setReports] = useState<ServiceReport[]>([])
   const [reportsState, setReportsState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [reportsError, setReportsError] = useState('')
+  const [selectedReport, setSelectedReport] = useState<ServiceReport | null>(null)
   const [isCreatingReport, setIsCreatingReport] = useState(false)
   const [editingReport, setEditingReport] = useState<ServiceReport | null>(null)
   const [reportFormNotice, setReportFormNotice] = useState('')
@@ -257,7 +260,7 @@ function App() {
   }, [employee, dashboardPage])
 
   useEffect(() => {
-    if (!selectedService && !isCreatingReport) {
+    if (!selectedService && !selectedReport && !isCreatingReport) {
       return
     }
 
@@ -267,6 +270,7 @@ function App() {
     function handleModalKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setSelectedService(null)
+        setSelectedReport(null)
         setIsCreatingReport(false)
         setEditingReport(null)
         setReportFormNotice('')
@@ -278,7 +282,7 @@ function App() {
       document.removeEventListener('keydown', handleModalKeyDown)
       document.body.style.overflow = previousOverflow
     }
-  }, [selectedService, isCreatingReport])
+  }, [selectedService, selectedReport, isCreatingReport])
 
   async function handleLogin(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -560,6 +564,8 @@ function App() {
       report.findings,
       report.recommendations,
       formatDate(report.reported_at),
+      report.employee_first_name,
+      report.employee_last_name,
     ]
       .filter(Boolean)
       .join(' ')
@@ -816,27 +822,23 @@ function App() {
                   <ul className="report-list">
                     {sortedMatchingReports.map((report) => (
                       <li className="report-card" key={report.id}>
-                        <div className="service-card-heading">
-                          <div>
-                            <span className="service-type">
-                              {serviceTypeLabels[report.service_type] ?? report.service_type}
-                            </span>
-                            <h3>{report.solar_plant_name}</h3>
-                          </div>
-                          <span className="service-count">{formatDate(report.reported_at)}</span>
-                        </div>
-                        <div className="report-card-actions">
-                          {report.submitted_at ? (
-                            <span className="report-submitted-label">
-                              Oddano {formatDate(report.submitted_at)}
-                            </span>
-                          ) : (
+                        <button
+                          className="report-card-open"
+                          type="button"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <h3>{report.solar_plant_name}</h3>
+                          <span className="visually-hidden">Odpri podrobnosti poročila</span>
+                        </button>
+                        {!report.submitted_at && (
+                          <div className="report-card-actions">
                             <>
                               <button
                                 className="report-edit-button"
                                 type="button"
                                 onClick={() => {
                                   setEditingReport(report)
+                                  setSelectedReport(null)
                                   setSelectedService(null)
                                   setIsCreatingReport(true)
                                   setReportFormNotice('')
@@ -855,26 +857,8 @@ function App() {
                                   : 'Oddaj poročilo'}
                               </button>
                             </>
-                          )}
-                        </div>
-                        <dl className="service-details">
-                          <div className="report-detail-wide">
-                            <dt>Povzetek dela</dt>
-                            <dd>{report.work_summary}</dd>
                           </div>
-                          {report.findings && (
-                            <div className="report-detail-wide">
-                              <dt>Ugotovitve</dt>
-                              <dd>{report.findings}</dd>
-                            </div>
-                          )}
-                          {report.recommendations && (
-                            <div className="report-detail-wide">
-                              <dt>Priporočila</dt>
-                              <dd>{report.recommendations}</dd>
-                            </div>
-                          )}
-                        </dl>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -968,6 +952,75 @@ function App() {
                     <div className="report-detail-wide">
                       <dt>Opombe</dt>
                       <dd>{selectedService.notes}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            </div>
+          )}
+          {selectedReport && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSelectedReport(null)
+                }
+              }}
+            >
+              <section
+                className="modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-details-title"
+                tabIndex={-1}
+              >
+                <div className="modal-heading">
+                  <div>
+                    <span className="service-type">
+                      {serviceTypeLabels[selectedReport.service_type] ?? selectedReport.service_type}
+                    </span>
+                    <h2 id="report-details-title">{selectedReport.solar_plant_name}</h2>
+                  </div>
+                  <button
+                    className="modal-close-button"
+                    type="button"
+                    aria-label="Zapri podrobnosti poročila"
+                    onClick={() => setSelectedReport(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <dl className="service-details modal-service-details">
+                  <div>
+                    <dt>Ustvaril</dt>
+                    <dd>
+                      {selectedReport.employee_first_name} {selectedReport.employee_last_name}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Datum poročila</dt>
+                    <dd>{formatDate(selectedReport.reported_at)}</dd>
+                  </div>
+                  {selectedReport.submitted_at && (
+                    <div>
+                      <dt>Oddano</dt>
+                      <dd>{formatDate(selectedReport.submitted_at)}</dd>
+                    </div>
+                  )}
+                  <div className="report-detail-wide">
+                    <dt>Povzetek dela</dt>
+                    <dd>{selectedReport.work_summary}</dd>
+                  </div>
+                  {selectedReport.findings && (
+                    <div className="report-detail-wide">
+                      <dt>Ugotovitve</dt>
+                      <dd>{selectedReport.findings}</dd>
+                    </div>
+                  )}
+                  {selectedReport.recommendations && (
+                    <div className="report-detail-wide">
+                      <dt>Priporočila</dt>
+                      <dd>{selectedReport.recommendations}</dd>
                     </div>
                   )}
                 </dl>
