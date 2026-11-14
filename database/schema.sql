@@ -60,6 +60,8 @@ CREATE TABLE services (
         REFERENCES employees(id) ON DELETE RESTRICT,
     id_manager BIGINT
         REFERENCES managers(id) ON DELETE RESTRICT,
+    urgency VARCHAR(20) NOT NULL DEFAULT 'standardno'
+        CHECK (urgency IN ('nujno', 'resno', 'standardno')),
     status VARCHAR(20) NOT NULL DEFAULT 'planned'
         CHECK (status IN ('planned', 'scheduled', 'in_progress', 'completed', 'cancelled')),
     scheduled_at TIMESTAMPTZ,
@@ -68,6 +70,10 @@ CREATE TABLE services (
     FOREIGN KEY (id_service_request, id_solar_plant)
         REFERENCES service_requests(id, id_solar_plant) ON DELETE RESTRICT
 );
+
+ALTER TABLE services
+    ADD COLUMN IF NOT EXISTS urgency VARCHAR(20) NOT NULL DEFAULT 'standardno'
+        CHECK (urgency IN ('nujno', 'resno', 'standardno'));
 
 CREATE TABLE service_reports (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

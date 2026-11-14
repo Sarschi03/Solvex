@@ -17,6 +17,7 @@ app.get("/services", async (_request, response) => {
         const result = await pool.query(`SELECT
         s.id,
         s.service_type,
+        s.urgency,
         s.status,
         s.scheduled_at,
         s.completed_at,
@@ -52,6 +53,7 @@ app.get("/employees/:employeeId/services", async (request, response) => {
         const result = await pool.query(`SELECT
         s.id,
         s.service_type,
+        s.urgency,
         s.status,
         s.scheduled_at,
         s.completed_at,
@@ -94,10 +96,13 @@ app.get("/employees/:employeeId/service-reports", async (request, response) => {
         sr.findings,
         sr.recommendations,
         sr.reported_at,
-        sr.submitted_at
+        sr.submitted_at,
+        e.first_name AS employee_first_name,
+        e.last_name AS employee_last_name
       FROM service_reports sr
       JOIN services s ON s.id = sr.id_service
       JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+      JOIN employees e ON e.id = sr.id_employee
       WHERE sr.id_employee = $1
       ORDER BY sr.reported_at DESC, sr.id DESC`, [employeeId]);
         return response.status(200).json({ reports: result.rows });
@@ -143,7 +148,7 @@ app.post("/employees/:employeeId/service-reports", async (request, response) => 
         FROM services s
         WHERE s.id = $1 AND s.id_employee = $2
         RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-          submitted_at
+          submitted_at, id_employee
       )
       SELECT
         ir.id,
@@ -154,10 +159,13 @@ app.post("/employees/:employeeId/service-reports", async (request, response) => 
         ir.findings,
         ir.recommendations,
         ir.reported_at,
-        ir.submitted_at
+        ir.submitted_at,
+        e.first_name AS employee_first_name,
+        e.last_name AS employee_last_name
       FROM inserted_report ir
       JOIN services s ON s.id = ir.id_service
-      JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant`, [
+      JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+      JOIN employees e ON e.id = ir.id_employee`, [
             serviceId,
             employeeId,
             workSummary,
@@ -220,7 +228,7 @@ app.put("/employees/:employeeId/service-reports/:reportId", async (request, resp
             reported_at = COALESCE($6::timestamptz, reported_at)
           WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
           RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-            submitted_at
+            submitted_at, id_employee
         )
         SELECT
           ur.id,
@@ -231,10 +239,13 @@ app.put("/employees/:employeeId/service-reports/:reportId", async (request, resp
           ur.findings,
           ur.recommendations,
           ur.reported_at,
-          ur.submitted_at
+          ur.submitted_at,
+          e.first_name AS employee_first_name,
+          e.last_name AS employee_last_name
         FROM updated_report ur
         JOIN services s ON s.id = ur.id_service
-        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant`, [
+        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+        JOIN employees e ON e.id = ur.id_employee`, [
             reportId,
             employeeId,
             workSummary,
@@ -281,7 +292,7 @@ app.post("/employees/:employeeId/service-reports/:reportId/submit", async (reque
           SET submitted_at = NOW()
           WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
           RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-            submitted_at
+            submitted_at, id_employee
         )
         SELECT
           sr.id,
@@ -292,10 +303,13 @@ app.post("/employees/:employeeId/service-reports/:reportId/submit", async (reque
           sr.findings,
           sr.recommendations,
           sr.reported_at,
-          sr.submitted_at
+          sr.submitted_at,
+          e.first_name AS employee_first_name,
+          e.last_name AS employee_last_name
         FROM submitted_report sr
         JOIN services s ON s.id = sr.id_service
-        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant`, [reportId, employeeId]);
+        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
+        JOIN employees e ON e.id = sr.id_employee`, [reportId, employeeId]);
         if (result.rowCount === 0) {
             const existingReport = await pool.query(`SELECT submitted_at
           FROM service_reports

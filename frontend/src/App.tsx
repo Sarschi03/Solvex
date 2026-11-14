@@ -1,4 +1,4 @@
-import { useEffect, useState, type SubmitEvent } from 'react'
+import { Fragment, useEffect, useState, type SubmitEvent } from 'react'
 import './App.css'
 
 type Employee = {
@@ -12,6 +12,7 @@ type Employee = {
 type Service = {
   id: string
   service_type: string
+  urgency: 'nujno' | 'resno' | 'standardno'
   status: string
   scheduled_at: string | null
   completed_at: string | null
@@ -36,9 +37,13 @@ type ServiceReport = {
   recommendations: string | null
   reported_at: string
   submitted_at: string | null
+  employee_first_name: string
+  employee_last_name: string
 }
 
 type DashboardPage = 'services' | 'reports'
+type ServiceSortOrder = 'newest' | 'oldest' | 'urgent-first' | 'standard-first'
+type ReportSortOrder = 'newest' | 'oldest'
 
 const serviceTypeLabels: Record<string, string> = {
   cleaning: 'Čiščenje',
@@ -52,6 +57,18 @@ const serviceStatusLabels: Record<string, string> = {
   in_progress: 'V teku',
   completed: 'Zaključen',
   cancelled: 'Preklican',
+}
+
+const serviceUrgencyLabels: Record<Service['urgency'], string> = {
+  nujno: 'Nujno',
+  resno: 'Resno',
+  standardno: 'Standardno',
+}
+
+const serviceUrgencyRank: Record<Service['urgency'], number> = {
+  nujno: 0,
+  resno: 1,
+  standardno: 2,
 }
 
 function formatDate(value: string | null) {
@@ -81,13 +98,20 @@ function App() {
   const [services, setServices] = useState<Service[]>([])
   const [servicesState, setServicesState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [servicesError, setServicesError] = useState('')
-  const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(() => new Set())
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [serviceSortOrder, setServiceSortOrder] = useState<ServiceSortOrder>('newest')
+  const [reportSearch, setReportSearch] = useState('')
+  const [reportSortOrder, setReportSortOrder] = useState<ReportSortOrder>('newest')
+  const [pinnedServiceIds, setPinnedServiceIds] = useState<Set<string>>(() => new Set())
+  const [servicePinNotice, setServicePinNotice] = useState('')
+  const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [assignedServices, setAssignedServices] = useState<Service[]>([])
   const [assignedServicesState, setAssignedServicesState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [assignedServicesError, setAssignedServicesError] = useState('')
   const [reports, setReports] = useState<ServiceReport[]>([])
   const [reportsState, setReportsState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [reportsError, setReportsError] = useState('')
+  const [selectedReport, setSelectedReport] = useState<ServiceReport | null>(null)
   const [isCreatingReport, setIsCreatingReport] = useState(false)
   const [editingReport, setEditingReport] = useState<ServiceReport | null>(null)
   const [reportFormNotice, setReportFormNotice] = useState('')
@@ -235,9 +259,35 @@ function App() {
     return () => controller.abort()
   }, [employee, dashboardPage])
 
+  useEffect(() => {
+    if (!selectedService && !selectedReport && !isCreatingReport) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    function handleModalKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setSelectedService(null)
+        setSelectedReport(null)
+        setIsCreatingReport(false)
+        setEditingReport(null)
+        setReportFormNotice('')
+      }
+    }
+
+    document.addEventListener('keydown', handleModalKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleModalKeyDown)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [selectedService, selectedReport, isCreatingReport])
+
   async function handleLogin(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     setNotice('')
+    setServicePinNotice('')
     setIsSubmitting(true)
 
     try {
@@ -261,6 +311,25 @@ function App() {
         return
       }
 
+      let parsedPinnedServices: unknown = []
+      try {
+        const pinnedServices = window.localStorage.getItem(
+          `solvex:pinned-services:${result.employee.id}`,
+        )
+        parsedPinnedServices = pinnedServices ? JSON.parse(pinnedServices) : []
+        setServicePinNotice('')
+      } catch (error) {
+        console.error('Pinned services could not be loaded:', error)
+        setServicePinNotice('Pripeti servisi se ne morejo naložiti iz brskalnika.')
+      }
+
+      setPinnedServiceIds(
+        new Set(
+          Array.isArray(parsedPinnedServices)
+            ? parsedPinnedServices.filter((id): id is string => typeof id === 'string')
+            : [],
+        ),
+      )
       setEmployee(result.employee)
       setPassword('')
     } catch {
@@ -281,13 +350,41 @@ function App() {
     setServices([])
     setServicesState('idle')
     setServicesError('')
-    setExpandedServiceIds(new Set())
+    setPinnedServiceIds(new Set())
+    setServicePinNotice('')
+    setSelectedService(null)
     setAssignedServices([])
     setAssignedServicesState('idle')
     setAssignedServicesError('')
     setReports([])
     setReportsState('idle')
     setReportsError('')
+  }
+
+  function toggleServicePin(serviceId: string) {
+    if (!employee) {
+      return
+    }
+
+    const nextPinnedServiceIds = new Set(pinnedServiceIds)
+
+    if (nextPinnedServiceIds.has(serviceId)) {
+      nextPinnedServiceIds.delete(serviceId)
+    } else {
+      nextPinnedServiceIds.add(serviceId)
+    }
+
+    setPinnedServiceIds(nextPinnedServiceIds)
+    try {
+      window.localStorage.setItem(
+        `solvex:pinned-services:${employee.id}`,
+        JSON.stringify([...nextPinnedServiceIds]),
+      )
+      setServicePinNotice('')
+    } catch (error) {
+      console.error('Pinned services could not be saved:', error)
+      setServicePinNotice('Sprememba pripetih servisov se ne more shraniti v brskalnik.')
+    }
   }
 
   async function handleReportSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -412,6 +509,75 @@ function App() {
     }
   }
 
+  const normalizedServiceSearch = serviceSearch.trim().toLocaleLowerCase('sl-SI')
+  const matchingServices = services.filter((service) => {
+    if (!normalizedServiceSearch) {
+      return true
+    }
+
+    return [
+      service.id,
+      service.solar_plant_name,
+      serviceTypeLabels[service.service_type] ?? service.service_type,
+      serviceUrgencyLabels[service.urgency],
+      serviceStatusLabels[service.status] ?? service.status,
+      service.installation_address,
+      service.postal_code,
+      service.city,
+      service.customer_first_name,
+      service.customer_last_name,
+      service.employee_first_name,
+      service.employee_last_name,
+      service.notes,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('sl-SI')
+      .includes(normalizedServiceSearch)
+  })
+  const sortedMatchingServices = [...matchingServices].sort((first, second) => {
+    if (serviceSortOrder === 'urgent-first' || serviceSortOrder === 'standard-first') {
+      const urgencyOrder = serviceUrgencyRank[first.urgency] - serviceUrgencyRank[second.urgency]
+      return serviceSortOrder === 'urgent-first' ? urgencyOrder : -urgencyOrder
+    }
+
+    const idOrder =
+      first.id.length === second.id.length
+        ? first.id.localeCompare(second.id)
+        : first.id.length - second.id.length
+
+    return serviceSortOrder === 'newest' ? -idOrder : idOrder
+  })
+  const visiblePinnedServices = sortedMatchingServices.filter((service) =>
+    pinnedServiceIds.has(service.id),
+  )
+  const visibleUnpinnedServices = sortedMatchingServices.filter(
+    (service) => !pinnedServiceIds.has(service.id),
+  )
+  const orderedServices = [...visiblePinnedServices, ...visibleUnpinnedServices]
+  const normalizedReportSearch = reportSearch.trim().toLocaleLowerCase('sl-SI')
+  const matchingReports = reports.filter((report) =>
+    [
+      report.solar_plant_name,
+      serviceTypeLabels[report.service_type] ?? report.service_type,
+      report.work_summary,
+      report.findings,
+      report.recommendations,
+      formatDate(report.reported_at),
+      report.employee_first_name,
+      report.employee_last_name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('sl-SI')
+      .includes(normalizedReportSearch),
+  )
+  const sortedMatchingReports = [...matchingReports].sort((first, second) => {
+    const dateOrder =
+      new Date(first.reported_at).getTime() - new Date(second.reported_at).getTime()
+    return reportSortOrder === 'newest' ? -dateOrder : dateOrder
+  })
+
   if (employee) {
     return (
       <main className="dashboard-page">
@@ -442,7 +608,9 @@ function App() {
             Odjava
           </button>
         </header>
-        <section className="dashboard-content">
+        <section
+          className={`dashboard-content${dashboardPage === 'services' ? ' services-dashboard-content' : ''}`}
+        >
           {dashboardPage === 'services' ? (
             <h1>Živjo, {employee.first_name}!</h1>
           ) : (
@@ -453,6 +621,7 @@ function App() {
                 type="button"
                 onClick={() => {
                   setEditingReport(null)
+                  setSelectedService(null)
                   setIsCreatingReport(true)
                   setReportFormNotice('')
                 }}
@@ -464,6 +633,44 @@ function App() {
           <div className="dashboard-placeholder">
             {dashboardPage === 'services' ? (
               <>
+                <div className="service-toolbar">
+                  <label className="service-search-field">
+                    <span className="visually-hidden">Išči servise</span>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <circle cx="10.8" cy="10.8" r="6.8" />
+                      <path d="m16 16 4.5 4.5" />
+                    </svg>
+                    <input
+                      type="search"
+                      value={serviceSearch}
+                      onChange={(event) => setServiceSearch(event.target.value)}
+                      placeholder="Išči servise ..."
+                    />
+                  </label>
+                  <label className="service-sort-field">
+                    <span>Razvrsti:</span>
+                    <select
+                      value={serviceSortOrder}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        if (
+                          value === 'oldest' ||
+                          value === 'urgent-first' ||
+                          value === 'standard-first'
+                        ) {
+                          setServiceSortOrder(value)
+                        } else {
+                          setServiceSortOrder('newest')
+                        }
+                      }}
+                    >
+                      <option value="newest">Najnovejši</option>
+                      <option value="oldest">Najstarejši</option>
+                      <option value="urgent-first">Nujno najprej</option>
+                      <option value="standard-first">Standardno najprej</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="services-heading">
                   <div>
                     <h2>Vsi servisi</h2>
@@ -471,7 +678,7 @@ function App() {
                   </div>
                   {servicesState === 'loaded' && (
                     <span className="service-count">
-                      {services.length} {services.length === 1 ? 'servis' : 'servisov'}
+                      {matchingServices.length} {matchingServices.length === 1 ? 'servis' : 'servisov'}
                     </span>
                   )}
                 </div>
@@ -484,13 +691,27 @@ function App() {
                     {servicesError}
                   </p>
                 )}
+                {servicePinNotice && (
+                  <p className="services-message services-error" role="status">
+                    {servicePinNotice}
+                  </p>
+                )}
                 {servicesState === 'loaded' && services.length === 0 && (
                   <p className="services-message">V bazi še ni ustvarjenih servisov.</p>
                 )}
                 {servicesState === 'loaded' && services.length > 0 && (
+                  matchingServices.length > 0 ? (
                   <ul className="service-list">
-                    {services.map((service) => (
-                      <li className="service-card" key={service.id}>
+                    {orderedServices.map((service, index) => (
+                      <Fragment key={service.id}>
+                        {index === visiblePinnedServices.length &&
+                          visiblePinnedServices.length > 0 &&
+                          visibleUnpinnedServices.length > 0 && (
+                            <li className="service-list-divider" role="separator">
+                              <span>Ostali servisi</span>
+                            </li>
+                          )}
+                        <li className={`service-card${pinnedServiceIds.has(service.id) ? ' pinned' : ''}`}>
                         <div className="service-card-heading">
                           <div>
                             <span className="service-type">
@@ -498,77 +719,72 @@ function App() {
                             </span>
                             <h3>{service.solar_plant_name}</h3>
                           </div>
-                          <button
-                            className="service-details-button"
-                            type="button"
-                            aria-expanded={expandedServiceIds.has(service.id)}
-                            aria-controls={`service-details-${service.id}`}
-                            onClick={() => {
-                              setExpandedServiceIds((currentIds) => {
-                                const nextIds = new Set(currentIds)
-
-                                if (nextIds.has(service.id)) {
-                                  nextIds.delete(service.id)
-                                } else {
-                                  nextIds.add(service.id)
-                                }
-
-                                return nextIds
-                              })
-                            }}
-                          >
-                            {expandedServiceIds.has(service.id) ? 'Skrij podrobnosti' : 'Podrobnosti'}
-                          </button>
+                          <div className="service-card-actions">
+                            <button
+                              className={`service-pin-button${pinnedServiceIds.has(service.id) ? ' pinned' : ''}`}
+                              type="button"
+                              aria-pressed={pinnedServiceIds.has(service.id)}
+                              aria-label={`${pinnedServiceIds.has(service.id) ? 'Odstrani pripenjanje' : 'Pripni servis'}: ${service.solar_plant_name}`}
+                              title={pinnedServiceIds.has(service.id) ? 'Odpni servis' : 'Pripni servis'}
+                              onClick={() => toggleServicePin(service.id)}
+                            >
+                              <svg
+                                aria-hidden="true"
+                                className="pin-icon"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="m16 3 5 5-4 1-3 3v4l-2 2-2-2v-4L7 9 3 8l5-5h8Z" />
+                                <path d="M12 18v4" />
+                              </svg>
+                            </button>
+                            <button
+                              className="service-details-button"
+                              type="button"
+                              onClick={() => setSelectedService(service)}
+                            >
+                              Podrobnosti
+                            </button>
+                          </div>
                         </div>
-                        {expandedServiceIds.has(service.id) && (
-                        <dl className="service-details" id={`service-details-${service.id}`}>
-                          <div>
-                            <dt>Stanje</dt>
-                            <dd>{serviceStatusLabels[service.status] ?? service.status}</dd>
-                          </div>
-                          <div>
-                            <dt>Stranka</dt>
-                            <dd>{service.customer_first_name} {service.customer_last_name}</dd>
-                          </div>
-                          <div>
-                            <dt>Lokacija</dt>
-                            <dd>
-                              {service.installation_address}, {service.postal_code} {service.city}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Termin</dt>
-                            <dd>{formatDate(service.scheduled_at)}</dd>
-                          </div>
-                          <div>
-                            <dt>Zaposleni</dt>
-                            <dd>
-                              {service.employee_first_name
-                                ? `${service.employee_first_name} ${service.employee_last_name}`
-                                : 'Ni dodeljen'}
-                            </dd>
-                          </div>
-                          {service.completed_at && (
-                            <div>
-                              <dt>Zaključen</dt>
-                              <dd>{formatDate(service.completed_at)}</dd>
-                            </div>
-                          )}
-                          {service.notes && (
-                            <div>
-                              <dt>Opombe</dt>
-                              <dd>{service.notes}</dd>
-                            </div>
-                          )}
-                        </dl>
-                        )}
-                      </li>
+                        </li>
+                      </Fragment>
                     ))}
                   </ul>
+                  ) : (
+                    <p className="services-message">Za iskanje »{serviceSearch}« ni servisov.</p>
+                  )
                 )}
               </>
             ) : (
               <>
+                <div className="service-toolbar">
+                  <label className="service-search-field">
+                    <span className="visually-hidden">Išči servisna poročila</span>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <circle cx="10.8" cy="10.8" r="6.8" />
+                      <path d="m16 16 4.5 4.5" />
+                    </svg>
+                    <input
+                      type="search"
+                      value={reportSearch}
+                      onChange={(event) => setReportSearch(event.target.value)}
+                      placeholder="Išči poročila ..."
+                    />
+                  </label>
+                  <label className="service-sort-field">
+                    <span>Razvrsti:</span>
+                    <select
+                      value={reportSortOrder}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setReportSortOrder(value === 'oldest' ? 'oldest' : 'newest')
+                      }}
+                    >
+                      <option value="newest">Najnovejši</option>
+                      <option value="oldest">Najstarejši</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="services-heading">
                   <div>
                     <h2>Ustvarjena poročila</h2>
@@ -576,7 +792,7 @@ function App() {
                   </div>
                   {reportsState === 'loaded' && (
                     <span className="service-count">
-                      {reports.length} {reports.length === 1 ? 'poročilo' : 'poročil'}
+                      {matchingReports.length} {matchingReports.length === 1 ? 'poročilo' : 'poročil'}
                     </span>
                   )}
                 </div>
@@ -589,36 +805,41 @@ function App() {
                     {reportsError}
                   </p>
                 )}
-                {reportsState === 'loaded' && reports.length === 0 && (
+                {reportsState === 'loaded' && reports.length === 0 && !normalizedReportSearch && (
                   <p className="services-message report-empty-state">
                     Trenutno še ni ustvarjenih servisnih poročil.
                   </p>
                 )}
+                {reportsState === 'loaded' &&
+                  reports.length > 0 &&
+                  matchingReports.length === 0 && (
+                    <p className="services-message report-empty-state">
+                      Za iskanje »{reportSearch}« ni poročil.
+                    </p>
+                  )}
                 {reportsState === 'loaded' && reports.length > 0 && (
+                  matchingReports.length > 0 ? (
                   <ul className="report-list">
-                    {reports.map((report) => (
+                    {sortedMatchingReports.map((report) => (
                       <li className="report-card" key={report.id}>
-                        <div className="service-card-heading">
-                          <div>
-                            <span className="service-type">
-                              {serviceTypeLabels[report.service_type] ?? report.service_type}
-                            </span>
-                            <h3>{report.solar_plant_name}</h3>
-                          </div>
-                          <span className="service-count">{formatDate(report.reported_at)}</span>
-                        </div>
-                        <div className="report-card-actions">
-                          {report.submitted_at ? (
-                            <span className="report-submitted-label">
-                              Oddano {formatDate(report.submitted_at)}
-                            </span>
-                          ) : (
+                        <button
+                          className="report-card-open"
+                          type="button"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <h3>{report.solar_plant_name}</h3>
+                          <span className="visually-hidden">Odpri podrobnosti poročila</span>
+                        </button>
+                        {!report.submitted_at && (
+                          <div className="report-card-actions">
                             <>
                               <button
                                 className="report-edit-button"
                                 type="button"
                                 onClick={() => {
                                   setEditingReport(report)
+                                  setSelectedReport(null)
+                                  setSelectedService(null)
                                   setIsCreatingReport(true)
                                   setReportFormNotice('')
                                 }}
@@ -636,164 +857,336 @@ function App() {
                                   : 'Oddaj poročilo'}
                               </button>
                             </>
-                          )}
-                        </div>
-                        <dl className="service-details">
-                          <div className="report-detail-wide">
-                            <dt>Povzetek dela</dt>
-                            <dd>{report.work_summary}</dd>
                           </div>
-                          {report.findings && (
-                            <div className="report-detail-wide">
-                              <dt>Ugotovitve</dt>
-                              <dd>{report.findings}</dd>
-                            </div>
-                          )}
-                          {report.recommendations && (
-                            <div className="report-detail-wide">
-                              <dt>Priporočila</dt>
-                              <dd>{report.recommendations}</dd>
-                            </div>
-                          )}
-                        </dl>
+                        )}
                       </li>
                     ))}
                   </ul>
-                )}
+                ) : null)}
                 {reportActionNotice && (
                   <p className="services-message services-error" role="alert">
                     {reportActionNotice}
                   </p>
                 )}
 
-                {isCreatingReport && (
-                  <form
-                    className="report-form"
-                    key={editingReport?.id ?? 'new'}
-                    onSubmit={handleReportSubmit}
-                  >
-                    <h3>{editingReport ? 'Uredi servisno poročilo' : 'Novo servisno poročilo'}</h3>
-                    <div className="report-form-fields">
-                      <div className="field">
-                        <label htmlFor="report-service-id">Servis</label>
-                        <select
-                          id="report-service-id"
-                          name="id_service"
-                          defaultValue={editingReport?.id_service ?? ''}
-                          required
-                          disabled={
-                            editingReport !== null ||
-                            assignedServicesState !== 'loaded' ||
-                            assignedServices.length === 0
-                          }
-                        >
-                          <option value="" disabled>
-                            {assignedServicesState === 'loading'
-                              ? 'Nalaganje servisov ...'
-                              : assignedServicesState === 'error'
-                                ? 'Servisov ni bilo mogoče naložiti'
-                                : assignedServices.length === 0
-                                  ? 'Ni dodeljenih servisov'
-                                  : 'Izberi servis'}
-                          </option>
-                          {assignedServices.map((service) => (
-                            <option key={service.id} value={service.id}>
-                              {service.solar_plant_name} —{' '}
-                              {serviceTypeLabels[service.service_type] ?? service.service_type}
-                              {' · '}
-                              {serviceStatusLabels[service.status] ?? service.status}
-                            </option>
-                          ))}
-                        </select>
-                        {assignedServicesState === 'error' && (
-                          <span className="field-hint field-error">{assignedServicesError}</span>
-                        )}
-                        {assignedServicesState === 'loaded' && assignedServices.length === 0 && (
-                          <span className="field-hint">
-                            Poročilo lahko ustvariš, ko ti bo dodeljen servis.
-                          </span>
-                        )}
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-work-summary">Povzetek dela</label>
-                        <textarea
-                          id="report-work-summary"
-                          name="work_summary"
-                          rows={4}
-                          defaultValue={editingReport?.work_summary ?? ''}
-                          required
-                        />
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-findings">Ugotovitve</label>
-                        <textarea
-                          id="report-findings"
-                          name="findings"
-                          rows={3}
-                          defaultValue={editingReport?.findings ?? ''}
-                        />
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-recommendations">Priporočila</label>
-                        <textarea
-                          id="report-recommendations"
-                          name="recommendations"
-                          rows={3}
-                          defaultValue={editingReport?.recommendations ?? ''}
-                        />
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-reported-at">Datum in čas poročila</label>
-                        <input
-                          id="report-reported-at"
-                          name="reported_at"
-                          type="datetime-local"
-                          defaultValue={
-                            editingReport ? toDateTimeLocal(editingReport.reported_at) : ''
-                          }
-                        />
-                        <span className="field-hint">
-                          Če polje pustite prazno, se datum določi samodejno.
-                        </span>
-                      </div>
-                    </div>
-                    {reportFormNotice && (
-                      <p className="form-notice" role="status">{reportFormNotice}</p>
-                    )}
-                    <div className="report-form-actions">
-                      <button
-                        className="report-cancel-button"
-                        type="button"
-                        disabled={isSubmittingReport}
-                        onClick={() => {
-                          setIsCreatingReport(false)
-                          setEditingReport(null)
-                          setReportFormNotice('')
-                        }}
-                      >
-                        Prekliči
-                      </button>
-                      <button
-                        className="create-report-button"
-                        type="submit"
-                        disabled={
-                          isSubmittingReport ||
-                          (!editingReport && assignedServices.length === 0)
-                        }
-                      >
-                        {isSubmittingReport
-                          ? 'Shranjevanje ...'
-                          : editingReport
-                            ? 'Shrani spremembe'
-                            : 'Shrani poročilo'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
               </>
             )}
           </div>
+          {selectedService && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSelectedService(null)
+                }
+              }}
+            >
+              <section
+                className="modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="service-modal-title"
+                tabIndex={-1}
+              >
+                <div className="modal-heading">
+                  <div>
+                    <span className="service-type">
+                      {serviceTypeLabels[selectedService.service_type] ?? selectedService.service_type}
+                    </span>
+                    <h2 id="service-modal-title">{selectedService.solar_plant_name}</h2>
+                  </div>
+                  <button
+                    className="modal-close-button"
+                    type="button"
+                    aria-label="Zapri podrobnosti servisa"
+                    onClick={() => setSelectedService(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <dl className="service-details modal-service-details">
+                  <div>
+                    <dt>Stopnja nujnosti</dt>
+                    <dd>
+                      <span className={`service-urgency urgency-${selectedService.urgency}`}>
+                        {serviceUrgencyLabels[selectedService.urgency]}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Stanje</dt>
+                    <dd>{serviceStatusLabels[selectedService.status] ?? selectedService.status}</dd>
+                  </div>
+                  <div>
+                    <dt>Stranka</dt>
+                    <dd>
+                      {selectedService.customer_first_name} {selectedService.customer_last_name}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Lokacija</dt>
+                    <dd>
+                      {selectedService.installation_address}, {selectedService.postal_code}{' '}
+                      {selectedService.city}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Termin</dt>
+                    <dd>{formatDate(selectedService.scheduled_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Zaposleni</dt>
+                    <dd>
+                      {selectedService.employee_first_name
+                        ? `${selectedService.employee_first_name} ${selectedService.employee_last_name}`
+                        : 'Ni dodeljen'}
+                    </dd>
+                  </div>
+                  {selectedService.completed_at && (
+                    <div>
+                      <dt>Zaključen</dt>
+                      <dd>{formatDate(selectedService.completed_at)}</dd>
+                    </div>
+                  )}
+                  {selectedService.notes && (
+                    <div className="report-detail-wide">
+                      <dt>Opombe</dt>
+                      <dd>{selectedService.notes}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            </div>
+          )}
+          {selectedReport && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSelectedReport(null)
+                }
+              }}
+            >
+              <section
+                className="modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-details-title"
+                tabIndex={-1}
+              >
+                <div className="modal-heading">
+                  <div>
+                    <span className="service-type">
+                      {serviceTypeLabels[selectedReport.service_type] ?? selectedReport.service_type}
+                    </span>
+                    <h2 id="report-details-title">{selectedReport.solar_plant_name}</h2>
+                  </div>
+                  <button
+                    className="modal-close-button"
+                    type="button"
+                    aria-label="Zapri podrobnosti poročila"
+                    onClick={() => setSelectedReport(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <dl className="service-details modal-service-details">
+                  <div>
+                    <dt>Ustvaril</dt>
+                    <dd>
+                      {selectedReport.employee_first_name} {selectedReport.employee_last_name}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Datum poročila</dt>
+                    <dd>{formatDate(selectedReport.reported_at)}</dd>
+                  </div>
+                  {selectedReport.submitted_at && (
+                    <div>
+                      <dt>Oddano</dt>
+                      <dd>{formatDate(selectedReport.submitted_at)}</dd>
+                    </div>
+                  )}
+                  <div className="report-detail-wide">
+                    <dt>Povzetek dela</dt>
+                    <dd>{selectedReport.work_summary}</dd>
+                  </div>
+                  {selectedReport.findings && (
+                    <div className="report-detail-wide">
+                      <dt>Ugotovitve</dt>
+                      <dd>{selectedReport.findings}</dd>
+                    </div>
+                  )}
+                  {selectedReport.recommendations && (
+                    <div className="report-detail-wide">
+                      <dt>Priporočila</dt>
+                      <dd>{selectedReport.recommendations}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            </div>
+          )}
+          {isCreatingReport && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => {
+                if (event.target === event.currentTarget && !isSubmittingReport) {
+                  setIsCreatingReport(false)
+                  setEditingReport(null)
+                  setReportFormNotice('')
+                }
+              }}
+            >
+              <section
+                className="modal-panel report-modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-modal-title"
+                tabIndex={-1}
+              >
+                <div className="modal-heading">
+                  <h2 id="report-modal-title">
+                    {editingReport ? 'Uredi servisno poročilo' : 'Novo servisno poročilo'}
+                  </h2>
+                  <button
+                    className="modal-close-button"
+                    type="button"
+                    aria-label="Zapri obrazec poročila"
+                    disabled={isSubmittingReport}
+                    onClick={() => {
+                      setIsCreatingReport(false)
+                      setEditingReport(null)
+                      setReportFormNotice('')
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <form
+                  className="report-form"
+                  key={editingReport?.id ?? 'new'}
+                  onSubmit={handleReportSubmit}
+                >
+                  <div className="report-form-fields">
+                    <div className="field">
+                      <label htmlFor="report-service-id">Servis</label>
+                      <select
+                        id="report-service-id"
+                        name="id_service"
+                        defaultValue={editingReport?.id_service ?? ''}
+                        required
+                        disabled={
+                          editingReport !== null ||
+                          assignedServicesState !== 'loaded' ||
+                          assignedServices.length === 0
+                        }
+                      >
+                        <option value="" disabled>
+                          {assignedServicesState === 'loading'
+                            ? 'Nalaganje servisov ...'
+                            : assignedServicesState === 'error'
+                              ? 'Servisov ni bilo mogoče naložiti'
+                              : assignedServices.length === 0
+                                ? 'Ni dodeljenih servisov'
+                                : 'Izberi servis'}
+                        </option>
+                        {assignedServices.map((service) => (
+                          <option key={service.id} value={service.id}>
+                            {service.solar_plant_name} —{' '}
+                            {serviceTypeLabels[service.service_type] ?? service.service_type}
+                            {' · '}
+                            {serviceStatusLabels[service.status] ?? service.status}
+                          </option>
+                        ))}
+                      </select>
+                      {assignedServicesState === 'error' && (
+                        <span className="field-hint field-error">{assignedServicesError}</span>
+                      )}
+                      {assignedServicesState === 'loaded' && assignedServices.length === 0 && (
+                        <span className="field-hint">
+                          Poročilo lahko ustvariš, ko ti bo dodeljen servis.
+                        </span>
+                      )}
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-work-summary">Povzetek dela</label>
+                      <textarea
+                        id="report-work-summary"
+                        name="work_summary"
+                        rows={4}
+                        defaultValue={editingReport?.work_summary ?? ''}
+                        required
+                      />
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-findings">Ugotovitve</label>
+                      <textarea
+                        id="report-findings"
+                        name="findings"
+                        rows={3}
+                        defaultValue={editingReport?.findings ?? ''}
+                      />
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-recommendations">Priporočila</label>
+                      <textarea
+                        id="report-recommendations"
+                        name="recommendations"
+                        rows={3}
+                        defaultValue={editingReport?.recommendations ?? ''}
+                      />
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-reported-at">Datum in čas poročila</label>
+                      <input
+                        id="report-reported-at"
+                        name="reported_at"
+                        type="datetime-local"
+                        defaultValue={
+                          editingReport ? toDateTimeLocal(editingReport.reported_at) : ''
+                        }
+                      />
+                      <span className="field-hint">
+                        Če polje pustite prazno, se datum določi samodejno.
+                      </span>
+                    </div>
+                  </div>
+                  {reportFormNotice && (
+                    <p className="form-notice" role="status">{reportFormNotice}</p>
+                  )}
+                  <div className="report-form-actions">
+                    <button
+                      className="report-cancel-button"
+                      type="button"
+                      disabled={isSubmittingReport}
+                      onClick={() => {
+                        setIsCreatingReport(false)
+                        setEditingReport(null)
+                        setReportFormNotice('')
+                      }}
+                    >
+                      Prekliči
+                    </button>
+                    <button
+                      className="create-report-button"
+                      type="submit"
+                      disabled={
+                        isSubmittingReport ||
+                        (!editingReport && assignedServices.length === 0)
+                      }
+                    >
+                      {isSubmittingReport
+                        ? 'Shranjevanje ...'
+                        : editingReport
+                          ? 'Shrani spremembe'
+                          : 'Shrani poročilo'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+          )}
         </section>
       </main>
     )
