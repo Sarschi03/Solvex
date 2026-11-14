@@ -1,4 +1,4 @@
-import { useEffect, useState, type SubmitEvent } from 'react'
+import { Fragment, useEffect, useState, type SubmitEvent } from 'react'
 import './App.css'
 
 type Employee = {
@@ -39,6 +39,7 @@ type ServiceReport = {
 }
 
 type DashboardPage = 'services' | 'reports'
+type ServiceSortOrder = 'newest' | 'oldest'
 
 const serviceTypeLabels: Record<string, string> = {
   cleaning: 'Čiščenje',
@@ -81,6 +82,8 @@ function App() {
   const [services, setServices] = useState<Service[]>([])
   const [servicesState, setServicesState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [servicesError, setServicesError] = useState('')
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [serviceSortOrder, setServiceSortOrder] = useState<ServiceSortOrder>('newest')
   const [pinnedServiceIds, setPinnedServiceIds] = useState<Set<string>>(() => new Set())
   const [servicePinNotice, setServicePinNotice] = useState('')
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(() => new Set())
@@ -462,6 +465,47 @@ function App() {
     }
   }
 
+  const normalizedServiceSearch = serviceSearch.trim().toLocaleLowerCase('sl-SI')
+  const matchingServices = services.filter((service) => {
+    if (!normalizedServiceSearch) {
+      return true
+    }
+
+    return [
+      service.id,
+      service.solar_plant_name,
+      serviceTypeLabels[service.service_type] ?? service.service_type,
+      serviceStatusLabels[service.status] ?? service.status,
+      service.installation_address,
+      service.postal_code,
+      service.city,
+      service.customer_first_name,
+      service.customer_last_name,
+      service.employee_first_name,
+      service.employee_last_name,
+      service.notes,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('sl-SI')
+      .includes(normalizedServiceSearch)
+  })
+  const sortedMatchingServices = [...matchingServices].sort((first, second) => {
+    const idOrder =
+      first.id.length === second.id.length
+        ? first.id.localeCompare(second.id)
+        : first.id.length - second.id.length
+
+    return serviceSortOrder === 'newest' ? -idOrder : idOrder
+  })
+  const visiblePinnedServices = sortedMatchingServices.filter((service) =>
+    pinnedServiceIds.has(service.id),
+  )
+  const visibleUnpinnedServices = sortedMatchingServices.filter(
+    (service) => !pinnedServiceIds.has(service.id),
+  )
+  const orderedServices = [...visiblePinnedServices, ...visibleUnpinnedServices]
+
   if (employee) {
     return (
       <main className="dashboard-page">
@@ -492,7 +536,9 @@ function App() {
             Odjava
           </button>
         </header>
-        <section className="dashboard-content">
+        <section
+          className={`dashboard-content${dashboardPage === 'services' ? ' services-dashboard-content' : ''}`}
+        >
           {dashboardPage === 'services' ? (
             <h1>Živjo, {employee.first_name}!</h1>
           ) : (
@@ -514,6 +560,34 @@ function App() {
           <div className="dashboard-placeholder">
             {dashboardPage === 'services' ? (
               <>
+                <div className="service-toolbar">
+                  <label className="service-search-field">
+                    <span className="visually-hidden">Išči servise</span>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <circle cx="10.8" cy="10.8" r="6.8" />
+                      <path d="m16 16 4.5 4.5" />
+                    </svg>
+                    <input
+                      type="search"
+                      value={serviceSearch}
+                      onChange={(event) => setServiceSearch(event.target.value)}
+                      placeholder="Išči servise ..."
+                    />
+                  </label>
+                  <label className="service-sort-field">
+                    <span>Razvrsti:</span>
+                    <select
+                      value={serviceSortOrder}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setServiceSortOrder(value === 'oldest' ? 'oldest' : 'newest')
+                      }}
+                    >
+                      <option value="newest">Najnovejši</option>
+                      <option value="oldest">Najstarejši</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="services-heading">
                   <div>
                     <h2>Vsi servisi</h2>
@@ -521,7 +595,7 @@ function App() {
                   </div>
                   {servicesState === 'loaded' && (
                     <span className="service-count">
-                      {services.length} {services.length === 1 ? 'servis' : 'servisov'}
+                      {matchingServices.length} {matchingServices.length === 1 ? 'servis' : 'servisov'}
                     </span>
                   )}
                 </div>
@@ -543,15 +617,18 @@ function App() {
                   <p className="services-message">V bazi še ni ustvarjenih servisov.</p>
                 )}
                 {servicesState === 'loaded' && services.length > 0 && (
+                  matchingServices.length > 0 ? (
                   <ul className="service-list">
-                    {[...services]
-                      .sort(
-                        (first, second) =>
-                          Number(pinnedServiceIds.has(second.id)) -
-                          Number(pinnedServiceIds.has(first.id)),
-                      )
-                      .map((service) => (
-                      <li className="service-card" key={service.id}>
+                    {orderedServices.map((service, index) => (
+                      <Fragment key={service.id}>
+                        {index === visiblePinnedServices.length &&
+                          visiblePinnedServices.length > 0 &&
+                          visibleUnpinnedServices.length > 0 && (
+                            <li className="service-list-divider" role="separator">
+                              <span>Ostali servisi</span>
+                            </li>
+                          )}
+                        <li className={`service-card${pinnedServiceIds.has(service.id) ? ' pinned' : ''}`}>
                         <div className="service-card-heading">
                           <div>
                             <span className="service-type">
@@ -564,9 +641,18 @@ function App() {
                               className={`service-pin-button${pinnedServiceIds.has(service.id) ? ' pinned' : ''}`}
                               type="button"
                               aria-pressed={pinnedServiceIds.has(service.id)}
+                              aria-label={`${pinnedServiceIds.has(service.id) ? 'Odstrani pripenjanje' : 'Pripni servis'}: ${service.solar_plant_name}`}
+                              title={pinnedServiceIds.has(service.id) ? 'Odpni servis' : 'Pripni servis'}
                               onClick={() => toggleServicePin(service.id)}
                             >
-                              {pinnedServiceIds.has(service.id) ? 'Odpni' : 'Pripni'}
+                              <svg
+                                aria-hidden="true"
+                                className="pin-icon"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="m16 3 5 5-4 1-3 3v4l-2 2-2-2v-4L7 9 3 8l5-5h8Z" />
+                                <path d="M12 18v4" />
+                              </svg>
                             </button>
                             <button
                               className="service-details-button"
@@ -592,50 +678,54 @@ function App() {
                           </div>
                         </div>
                         {expandedServiceIds.has(service.id) && (
-                        <dl className="service-details" id={`service-details-${service.id}`}>
-                          <div>
-                            <dt>Stanje</dt>
-                            <dd>{serviceStatusLabels[service.status] ?? service.status}</dd>
-                          </div>
-                          <div>
-                            <dt>Stranka</dt>
-                            <dd>{service.customer_first_name} {service.customer_last_name}</dd>
-                          </div>
-                          <div>
-                            <dt>Lokacija</dt>
-                            <dd>
-                              {service.installation_address}, {service.postal_code} {service.city}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Termin</dt>
-                            <dd>{formatDate(service.scheduled_at)}</dd>
-                          </div>
-                          <div>
-                            <dt>Zaposleni</dt>
-                            <dd>
-                              {service.employee_first_name
-                                ? `${service.employee_first_name} ${service.employee_last_name}`
-                                : 'Ni dodeljen'}
-                            </dd>
-                          </div>
-                          {service.completed_at && (
+                          <dl className="service-details" id={`service-details-${service.id}`}>
                             <div>
-                              <dt>Zaključen</dt>
-                              <dd>{formatDate(service.completed_at)}</dd>
+                              <dt>Stanje</dt>
+                              <dd>{serviceStatusLabels[service.status] ?? service.status}</dd>
                             </div>
-                          )}
-                          {service.notes && (
                             <div>
-                              <dt>Opombe</dt>
-                              <dd>{service.notes}</dd>
+                              <dt>Stranka</dt>
+                              <dd>{service.customer_first_name} {service.customer_last_name}</dd>
                             </div>
-                          )}
-                        </dl>
+                            <div>
+                              <dt>Lokacija</dt>
+                              <dd>
+                                {service.installation_address}, {service.postal_code} {service.city}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Termin</dt>
+                              <dd>{formatDate(service.scheduled_at)}</dd>
+                            </div>
+                            <div>
+                              <dt>Zaposleni</dt>
+                              <dd>
+                                {service.employee_first_name
+                                  ? `${service.employee_first_name} ${service.employee_last_name}`
+                                  : 'Ni dodeljen'}
+                              </dd>
+                            </div>
+                            {service.completed_at && (
+                              <div>
+                                <dt>Zaključen</dt>
+                                <dd>{formatDate(service.completed_at)}</dd>
+                              </div>
+                            )}
+                            {service.notes && (
+                              <div>
+                                <dt>Opombe</dt>
+                                <dd>{service.notes}</dd>
+                              </div>
+                            )}
+                          </dl>
                         )}
-                      </li>
+                        </li>
+                      </Fragment>
                     ))}
                   </ul>
+                  ) : (
+                    <p className="services-message">Za iskanje »{serviceSearch}« ni servisov.</p>
+                  )
                 )}
               </>
             ) : (
