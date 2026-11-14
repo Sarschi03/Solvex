@@ -84,9 +84,11 @@ function App() {
   const [servicesError, setServicesError] = useState('')
   const [serviceSearch, setServiceSearch] = useState('')
   const [serviceSortOrder, setServiceSortOrder] = useState<ServiceSortOrder>('newest')
+  const [reportSearch, setReportSearch] = useState('')
+  const [reportSortOrder, setReportSortOrder] = useState<ServiceSortOrder>('newest')
   const [pinnedServiceIds, setPinnedServiceIds] = useState<Set<string>>(() => new Set())
   const [servicePinNotice, setServicePinNotice] = useState('')
-  const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(() => new Set())
+  const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [assignedServices, setAssignedServices] = useState<Service[]>([])
   const [assignedServicesState, setAssignedServicesState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [assignedServicesError, setAssignedServicesError] = useState('')
@@ -240,6 +242,30 @@ function App() {
     return () => controller.abort()
   }, [employee, dashboardPage])
 
+  useEffect(() => {
+    if (!selectedService && !isCreatingReport) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    function handleModalKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setSelectedService(null)
+        setIsCreatingReport(false)
+        setEditingReport(null)
+        setReportFormNotice('')
+      }
+    }
+
+    document.addEventListener('keydown', handleModalKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleModalKeyDown)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [selectedService, isCreatingReport])
+
   async function handleLogin(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     setNotice('')
@@ -308,7 +334,7 @@ function App() {
     setServicesError('')
     setPinnedServiceIds(new Set())
     setServicePinNotice('')
-    setExpandedServiceIds(new Set())
+    setSelectedService(null)
     setAssignedServices([])
     setAssignedServicesState('idle')
     setAssignedServicesError('')
@@ -505,6 +531,26 @@ function App() {
     (service) => !pinnedServiceIds.has(service.id),
   )
   const orderedServices = [...visiblePinnedServices, ...visibleUnpinnedServices]
+  const normalizedReportSearch = reportSearch.trim().toLocaleLowerCase('sl-SI')
+  const matchingReports = reports.filter((report) =>
+    [
+      report.solar_plant_name,
+      serviceTypeLabels[report.service_type] ?? report.service_type,
+      report.work_summary,
+      report.findings,
+      report.recommendations,
+      formatDate(report.reported_at),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('sl-SI')
+      .includes(normalizedReportSearch),
+  )
+  const sortedMatchingReports = [...matchingReports].sort((first, second) => {
+    const dateOrder =
+      new Date(first.reported_at).getTime() - new Date(second.reported_at).getTime()
+    return reportSortOrder === 'newest' ? -dateOrder : dateOrder
+  })
 
   if (employee) {
     return (
@@ -549,6 +595,7 @@ function App() {
                 type="button"
                 onClick={() => {
                   setEditingReport(null)
+                  setSelectedService(null)
                   setIsCreatingReport(true)
                   setReportFormNotice('')
                 }}
@@ -657,68 +704,12 @@ function App() {
                             <button
                               className="service-details-button"
                               type="button"
-                              aria-expanded={expandedServiceIds.has(service.id)}
-                              aria-controls={`service-details-${service.id}`}
-                              onClick={() => {
-                                setExpandedServiceIds((currentIds) => {
-                                  const nextIds = new Set(currentIds)
-
-                                  if (nextIds.has(service.id)) {
-                                    nextIds.delete(service.id)
-                                  } else {
-                                    nextIds.add(service.id)
-                                  }
-
-                                  return nextIds
-                                })
-                              }}
+                              onClick={() => setSelectedService(service)}
                             >
-                              {expandedServiceIds.has(service.id) ? 'Skrij podrobnosti' : 'Podrobnosti'}
+                              Podrobnosti
                             </button>
                           </div>
                         </div>
-                        {expandedServiceIds.has(service.id) && (
-                          <dl className="service-details" id={`service-details-${service.id}`}>
-                            <div>
-                              <dt>Stanje</dt>
-                              <dd>{serviceStatusLabels[service.status] ?? service.status}</dd>
-                            </div>
-                            <div>
-                              <dt>Stranka</dt>
-                              <dd>{service.customer_first_name} {service.customer_last_name}</dd>
-                            </div>
-                            <div>
-                              <dt>Lokacija</dt>
-                              <dd>
-                                {service.installation_address}, {service.postal_code} {service.city}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>Termin</dt>
-                              <dd>{formatDate(service.scheduled_at)}</dd>
-                            </div>
-                            <div>
-                              <dt>Zaposleni</dt>
-                              <dd>
-                                {service.employee_first_name
-                                  ? `${service.employee_first_name} ${service.employee_last_name}`
-                                  : 'Ni dodeljen'}
-                              </dd>
-                            </div>
-                            {service.completed_at && (
-                              <div>
-                                <dt>Zaključen</dt>
-                                <dd>{formatDate(service.completed_at)}</dd>
-                              </div>
-                            )}
-                            {service.notes && (
-                              <div>
-                                <dt>Opombe</dt>
-                                <dd>{service.notes}</dd>
-                              </div>
-                            )}
-                          </dl>
-                        )}
                         </li>
                       </Fragment>
                     ))}
@@ -730,6 +721,34 @@ function App() {
               </>
             ) : (
               <>
+                <div className="service-toolbar">
+                  <label className="service-search-field">
+                    <span className="visually-hidden">Išči servisna poročila</span>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <circle cx="10.8" cy="10.8" r="6.8" />
+                      <path d="m16 16 4.5 4.5" />
+                    </svg>
+                    <input
+                      type="search"
+                      value={reportSearch}
+                      onChange={(event) => setReportSearch(event.target.value)}
+                      placeholder="Išči poročila ..."
+                    />
+                  </label>
+                  <label className="service-sort-field">
+                    <span>Razvrsti:</span>
+                    <select
+                      value={reportSortOrder}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setReportSortOrder(value === 'oldest' ? 'oldest' : 'newest')
+                      }}
+                    >
+                      <option value="newest">Najnovejši</option>
+                      <option value="oldest">Najstarejši</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="services-heading">
                   <div>
                     <h2>Ustvarjena poročila</h2>
@@ -737,7 +756,7 @@ function App() {
                   </div>
                   {reportsState === 'loaded' && (
                     <span className="service-count">
-                      {reports.length} {reports.length === 1 ? 'poročilo' : 'poročil'}
+                      {matchingReports.length} {matchingReports.length === 1 ? 'poročilo' : 'poročil'}
                     </span>
                   )}
                 </div>
@@ -750,14 +769,22 @@ function App() {
                     {reportsError}
                   </p>
                 )}
-                {reportsState === 'loaded' && reports.length === 0 && (
+                {reportsState === 'loaded' && reports.length === 0 && !normalizedReportSearch && (
                   <p className="services-message report-empty-state">
                     Trenutno še ni ustvarjenih servisnih poročil.
                   </p>
                 )}
+                {reportsState === 'loaded' &&
+                  reports.length > 0 &&
+                  matchingReports.length === 0 && (
+                    <p className="services-message report-empty-state">
+                      Za iskanje »{reportSearch}« ni poročil.
+                    </p>
+                  )}
                 {reportsState === 'loaded' && reports.length > 0 && (
+                  matchingReports.length > 0 ? (
                   <ul className="report-list">
-                    {reports.map((report) => (
+                    {sortedMatchingReports.map((report) => (
                       <li className="report-card" key={report.id}>
                         <div className="service-card-heading">
                           <div>
@@ -780,6 +807,7 @@ function App() {
                                 type="button"
                                 onClick={() => {
                                   setEditingReport(report)
+                                  setSelectedService(null)
                                   setIsCreatingReport(true)
                                   setReportFormNotice('')
                                 }}
@@ -820,141 +848,254 @@ function App() {
                       </li>
                     ))}
                   </ul>
-                )}
+                ) : null)}
                 {reportActionNotice && (
                   <p className="services-message services-error" role="alert">
                     {reportActionNotice}
                   </p>
                 )}
 
-                {isCreatingReport && (
-                  <form
-                    className="report-form"
-                    key={editingReport?.id ?? 'new'}
-                    onSubmit={handleReportSubmit}
-                  >
-                    <h3>{editingReport ? 'Uredi servisno poročilo' : 'Novo servisno poročilo'}</h3>
-                    <div className="report-form-fields">
-                      <div className="field">
-                        <label htmlFor="report-service-id">Servis</label>
-                        <select
-                          id="report-service-id"
-                          name="id_service"
-                          defaultValue={editingReport?.id_service ?? ''}
-                          required
-                          disabled={
-                            editingReport !== null ||
-                            assignedServicesState !== 'loaded' ||
-                            assignedServices.length === 0
-                          }
-                        >
-                          <option value="" disabled>
-                            {assignedServicesState === 'loading'
-                              ? 'Nalaganje servisov ...'
-                              : assignedServicesState === 'error'
-                                ? 'Servisov ni bilo mogoče naložiti'
-                                : assignedServices.length === 0
-                                  ? 'Ni dodeljenih servisov'
-                                  : 'Izberi servis'}
-                          </option>
-                          {assignedServices.map((service) => (
-                            <option key={service.id} value={service.id}>
-                              {service.solar_plant_name} —{' '}
-                              {serviceTypeLabels[service.service_type] ?? service.service_type}
-                              {' · '}
-                              {serviceStatusLabels[service.status] ?? service.status}
-                            </option>
-                          ))}
-                        </select>
-                        {assignedServicesState === 'error' && (
-                          <span className="field-hint field-error">{assignedServicesError}</span>
-                        )}
-                        {assignedServicesState === 'loaded' && assignedServices.length === 0 && (
-                          <span className="field-hint">
-                            Poročilo lahko ustvariš, ko ti bo dodeljen servis.
-                          </span>
-                        )}
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-work-summary">Povzetek dela</label>
-                        <textarea
-                          id="report-work-summary"
-                          name="work_summary"
-                          rows={4}
-                          defaultValue={editingReport?.work_summary ?? ''}
-                          required
-                        />
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-findings">Ugotovitve</label>
-                        <textarea
-                          id="report-findings"
-                          name="findings"
-                          rows={3}
-                          defaultValue={editingReport?.findings ?? ''}
-                        />
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-recommendations">Priporočila</label>
-                        <textarea
-                          id="report-recommendations"
-                          name="recommendations"
-                          rows={3}
-                          defaultValue={editingReport?.recommendations ?? ''}
-                        />
-                      </div>
-                      <div className="field report-form-wide">
-                        <label htmlFor="report-reported-at">Datum in čas poročila</label>
-                        <input
-                          id="report-reported-at"
-                          name="reported_at"
-                          type="datetime-local"
-                          defaultValue={
-                            editingReport ? toDateTimeLocal(editingReport.reported_at) : ''
-                          }
-                        />
-                        <span className="field-hint">
-                          Če polje pustite prazno, se datum določi samodejno.
-                        </span>
-                      </div>
-                    </div>
-                    {reportFormNotice && (
-                      <p className="form-notice" role="status">{reportFormNotice}</p>
-                    )}
-                    <div className="report-form-actions">
-                      <button
-                        className="report-cancel-button"
-                        type="button"
-                        disabled={isSubmittingReport}
-                        onClick={() => {
-                          setIsCreatingReport(false)
-                          setEditingReport(null)
-                          setReportFormNotice('')
-                        }}
-                      >
-                        Prekliči
-                      </button>
-                      <button
-                        className="create-report-button"
-                        type="submit"
-                        disabled={
-                          isSubmittingReport ||
-                          (!editingReport && assignedServices.length === 0)
-                        }
-                      >
-                        {isSubmittingReport
-                          ? 'Shranjevanje ...'
-                          : editingReport
-                            ? 'Shrani spremembe'
-                            : 'Shrani poročilo'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
               </>
             )}
           </div>
+          {selectedService && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSelectedService(null)
+                }
+              }}
+            >
+              <section
+                className="modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="service-modal-title"
+                tabIndex={-1}
+              >
+                <div className="modal-heading">
+                  <div>
+                    <span className="service-type">
+                      {serviceTypeLabels[selectedService.service_type] ?? selectedService.service_type}
+                    </span>
+                    <h2 id="service-modal-title">{selectedService.solar_plant_name}</h2>
+                  </div>
+                  <button
+                    className="modal-close-button"
+                    type="button"
+                    aria-label="Zapri podrobnosti servisa"
+                    onClick={() => setSelectedService(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <dl className="service-details modal-service-details">
+                  <div>
+                    <dt>Stanje</dt>
+                    <dd>{serviceStatusLabels[selectedService.status] ?? selectedService.status}</dd>
+                  </div>
+                  <div>
+                    <dt>Stranka</dt>
+                    <dd>
+                      {selectedService.customer_first_name} {selectedService.customer_last_name}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Lokacija</dt>
+                    <dd>
+                      {selectedService.installation_address}, {selectedService.postal_code}{' '}
+                      {selectedService.city}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Termin</dt>
+                    <dd>{formatDate(selectedService.scheduled_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Zaposleni</dt>
+                    <dd>
+                      {selectedService.employee_first_name
+                        ? `${selectedService.employee_first_name} ${selectedService.employee_last_name}`
+                        : 'Ni dodeljen'}
+                    </dd>
+                  </div>
+                  {selectedService.completed_at && (
+                    <div>
+                      <dt>Zaključen</dt>
+                      <dd>{formatDate(selectedService.completed_at)}</dd>
+                    </div>
+                  )}
+                  {selectedService.notes && (
+                    <div className="report-detail-wide">
+                      <dt>Opombe</dt>
+                      <dd>{selectedService.notes}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            </div>
+          )}
+          {isCreatingReport && (
+            <div
+              className="modal-backdrop"
+              onClick={(event) => {
+                if (event.target === event.currentTarget && !isSubmittingReport) {
+                  setIsCreatingReport(false)
+                  setEditingReport(null)
+                  setReportFormNotice('')
+                }
+              }}
+            >
+              <section
+                className="modal-panel report-modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-modal-title"
+                tabIndex={-1}
+              >
+                <div className="modal-heading">
+                  <h2 id="report-modal-title">
+                    {editingReport ? 'Uredi servisno poročilo' : 'Novo servisno poročilo'}
+                  </h2>
+                  <button
+                    className="modal-close-button"
+                    type="button"
+                    aria-label="Zapri obrazec poročila"
+                    disabled={isSubmittingReport}
+                    onClick={() => {
+                      setIsCreatingReport(false)
+                      setEditingReport(null)
+                      setReportFormNotice('')
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <form
+                  className="report-form"
+                  key={editingReport?.id ?? 'new'}
+                  onSubmit={handleReportSubmit}
+                >
+                  <div className="report-form-fields">
+                    <div className="field">
+                      <label htmlFor="report-service-id">Servis</label>
+                      <select
+                        id="report-service-id"
+                        name="id_service"
+                        defaultValue={editingReport?.id_service ?? ''}
+                        required
+                        disabled={
+                          editingReport !== null ||
+                          assignedServicesState !== 'loaded' ||
+                          assignedServices.length === 0
+                        }
+                      >
+                        <option value="" disabled>
+                          {assignedServicesState === 'loading'
+                            ? 'Nalaganje servisov ...'
+                            : assignedServicesState === 'error'
+                              ? 'Servisov ni bilo mogoče naložiti'
+                              : assignedServices.length === 0
+                                ? 'Ni dodeljenih servisov'
+                                : 'Izberi servis'}
+                        </option>
+                        {assignedServices.map((service) => (
+                          <option key={service.id} value={service.id}>
+                            {service.solar_plant_name} —{' '}
+                            {serviceTypeLabels[service.service_type] ?? service.service_type}
+                            {' · '}
+                            {serviceStatusLabels[service.status] ?? service.status}
+                          </option>
+                        ))}
+                      </select>
+                      {assignedServicesState === 'error' && (
+                        <span className="field-hint field-error">{assignedServicesError}</span>
+                      )}
+                      {assignedServicesState === 'loaded' && assignedServices.length === 0 && (
+                        <span className="field-hint">
+                          Poročilo lahko ustvariš, ko ti bo dodeljen servis.
+                        </span>
+                      )}
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-work-summary">Povzetek dela</label>
+                      <textarea
+                        id="report-work-summary"
+                        name="work_summary"
+                        rows={4}
+                        defaultValue={editingReport?.work_summary ?? ''}
+                        required
+                      />
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-findings">Ugotovitve</label>
+                      <textarea
+                        id="report-findings"
+                        name="findings"
+                        rows={3}
+                        defaultValue={editingReport?.findings ?? ''}
+                      />
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-recommendations">Priporočila</label>
+                      <textarea
+                        id="report-recommendations"
+                        name="recommendations"
+                        rows={3}
+                        defaultValue={editingReport?.recommendations ?? ''}
+                      />
+                    </div>
+                    <div className="field report-form-wide">
+                      <label htmlFor="report-reported-at">Datum in čas poročila</label>
+                      <input
+                        id="report-reported-at"
+                        name="reported_at"
+                        type="datetime-local"
+                        defaultValue={
+                          editingReport ? toDateTimeLocal(editingReport.reported_at) : ''
+                        }
+                      />
+                      <span className="field-hint">
+                        Če polje pustite prazno, se datum določi samodejno.
+                      </span>
+                    </div>
+                  </div>
+                  {reportFormNotice && (
+                    <p className="form-notice" role="status">{reportFormNotice}</p>
+                  )}
+                  <div className="report-form-actions">
+                    <button
+                      className="report-cancel-button"
+                      type="button"
+                      disabled={isSubmittingReport}
+                      onClick={() => {
+                        setIsCreatingReport(false)
+                        setEditingReport(null)
+                        setReportFormNotice('')
+                      }}
+                    >
+                      Prekliči
+                    </button>
+                    <button
+                      className="create-report-button"
+                      type="submit"
+                      disabled={
+                        isSubmittingReport ||
+                        (!editingReport && assignedServices.length === 0)
+                      }
+                    >
+                      {isSubmittingReport
+                        ? 'Shranjevanje ...'
+                        : editingReport
+                          ? 'Shrani spremembe'
+                          : 'Shrani poročilo'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+          )}
         </section>
       </main>
     )
