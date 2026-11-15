@@ -69,6 +69,22 @@ describe('API s pravo PostgreSQL bazo', () => {
     assert.equal(result.body.database, 'connected');
   });
 
+  it('zavrne neveljaven e-poštni naslov pri prijavi', async () => {
+    const result = await request('/employees/login', 'POST', { email: 'invalid', password: 'TestPassword123!' });
+    assert.equal(result.status, 400);
+    assert.equal(result.body.message, 'Vnesi veljaven e-poštni naslov.');
+  });
+
+  it('zavrne prekratko geslo lastnika pred zapisom v bazo', async () => {
+    const result = await request('/customers/register', 'POST', {
+      firstName: 'Test', lastName: 'Lastnik', email: 'short@example.com',
+      password: 'short', address: 'Test 1', postalCode: '2000', city: 'Maribor',
+    });
+    assert.equal(result.status, 400);
+    const saved = await pool.query('SELECT id FROM customers WHERE email = $1', ['short@example.com']);
+    assert.equal(saved.rowCount, 0);
+  });
+
   it('zavrne neveljavno prijavo in napačno geslo', async () => {
     assert.equal((await request('/employees/login', 'POST', {})).status, 400);
     assert.equal((await request('/employees/login', 'POST', { email: 'test@example.com', password: 'wrong' })).status, 401);

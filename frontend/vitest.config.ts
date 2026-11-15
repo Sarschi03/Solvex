@@ -7,5 +7,10 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.tsx'],
     restoreMocks: true,
+    coverage: {
+      provider: 'v8',
+      include: ['src/App.tsx'],
+      reporter: ['text', 'lcov', 'html'],
+    },
   },
 })

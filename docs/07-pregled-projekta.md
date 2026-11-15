@@ -68,8 +68,8 @@ Preverjena sta razvojni zagon in produkcijsko streženje aplikacije z istim API
 prefiksom `/api`. Preverjanje HTTP vključuje prijavo, branje servisov in zapis
 poročila v pravo bazo; avtomatizirani testi pokrivajo tudi urejanje in zaklepanje.
 
-Uspešno preverjanje: lint in produkcijska gradnja obeh delov, 9 integracijskih
-testov API-ja ter 5 testov React vmesnika. Testi API-ja uporabljajo ločeno začasno
+Uspešno preverjanje: lint in produkcijska gradnja obeh delov, 11 integracijskih
+testov API-ja ter 7 testov React vmesnika. Testi API-ja uporabljajo ločeno začasno
 shemo in jo po izvedbi odstranijo. Uspešni testi potrjujejo pokrite scenarije,
 ne pomenijo pa izpolnitve manjkajočih uporabniških zgodb ali popolne varnosti.
 

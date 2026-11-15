@@ -1,85 +1,113 @@
 # CI/CD z GitHub Actions
 
-## Obnašanje cevovoda
+## Workflow in preverjanja
 
-Datoteka `.github/workflows/ci-cd.yml` se zažene ob vsakem pushu, ob pull requestu
-v `main` in ročno (`workflow_dispatch`). Ločeni opravili za frontend in backend
-izvedeta `npm ci`, ESLint, produkcijsko gradnjo in teste. Backend dobi svežo
-PostgreSQL 18 storitev, preveri prvi ter ponovni zagon migracije in zažene 9
-integracijskih testov. Frontend zažene 5 testov prijave z Vitest in Testing Library.
-Gradnji sta shranjeni kot artefakta za sedem dni.
+`.github/workflows/ci-cd.yml` se samodejno sproži ob vsakem pull requestu v `main`
+in pushu v `main`; dodatno je dovoljen ročni zagon. Razvoj poteka na ločenih vejah,
+spremembe v `main` pa se združujejo prek pull requestov.
 
-Opravilo `deploy` se izvede samo ob pushu v `main`, tudi po združitvi PR-ja,
-in šele po uspehu obeh preverjanj. Render deploy hook dobi natančen preizkušeni
-commit SHA. Cevovod počaka, da `/api/health` potrdi povezavo z bazo in isti SHA;
-sprožitev namestitve sama po sebi še ne šteje kot uspeh. PR in ročni zagon ne
-nameščata aplikacije. Brez nastavitev za Render namestitev jasno odpove.
+| Job | Vsebina | Rezultat |
+| --- | --- | --- |
+| `lint` | `npm ci` in ESLint za frontend in backend | Napaka linterja povzroči neuspeh joba. |
+| `build` | TypeScript/Vite gradnja obeh delov | Artefakt `application-build` z že prevedeno aplikacijo. |
+| `test` | 11 API testov s PostgreSQL 18 in 7 React testov | 18 testov, HTML/LCOV poročili v `coverage-reports`; neuspešen test ustavi cevovod. |
+| `deploy` | Prenos artefakta iz `build`, objava in preverjanje javnega URL-ja | Samo push v `main`, `needs: [lint, build, test]`, okolje `production`. |
 
-## Gostovanje celotne aplikacije
+Vsak job za preverjanje uporablja `actions/setup-node` z npm cachingom in obema
+lock datotekama. `npm ci` zagotovi ponovljivo namestitev. Artefakti so shranjeni
+sedem dni z `actions/upload-artifact`; poročila se poskusijo shraniti tudi ob
+neuspešnih testih. API testi uporabljajo začasno ločeno shemo. Vitest meri
+pokritost `App.tsx`, c8 pa `app.ts`; zagonski `server.ts` ni v imenovalcu.
 
-`render.yaml` opiše Node.js web service in PostgreSQL v Frankfurtu. React se
-zgradi v `frontend/dist`, Express pa v produkciji streže statične datoteke in API
-na istem naslovu. Zato ni potrebna ločena CORS konfiguracija. Render določi `PORT`,
-podatke baze pa Blueprint poveže prek okolijskih spremenljivk.
+## Namestitev iz artefakta brez ponovne gradnje
 
-Izbrana sta brezplačna paketa za demonstracijo; pred ustvarjanjem preverite
-trenutno razpoložljivost, omejitve in veljavnost brezplačne baze pri ponudniku.
-Konfiguracija ne ustvari plačljivih virov samodejno. Demo seed se na Renderju ne
-izvaja. Pri vsakem zagonu se izvede migracija, ki znotraj transakcije in zaklepa
-ustvari začetno shemo samo enkrat. Migracija je namenjena novi bazi; obstoječa
-baza iz druge namestitve zahteva posebej pripravljeno migracijo.
+Job `build` pripravi `application-build.tar.gz`, ki vsebuje:
 
-## Aktivacija namestitve
+- `frontend/dist/` in `backend/dist/`,
+- backend `package.json` in lock datoteko,
+- skripte za zagon ter migracijo in `database/schema.sql`,
+- `release.json` z SHA izvornega commita.
 
-1. Spremembe združite v `main` svojega forka, ne izvornega repozitorija.
-2. V [Render Dashboard](https://dashboard.render.com/) izberite New → Blueprint,
-   povežite `Sarschi03/Solvex` in uporabite `render.yaml` z veje `main`.
-   Preverite izbrane pakete pred potrditvijo ustvarjanja virov.
-3. V Settings nastalega web servisa kopirajte skrivni Deploy Hook URL.
-4. V [GitHub Actions settings](https://github.com/Sarschi03/Solvex/settings/secrets/actions)
-   dodajte secret `RENDER_DEPLOY_HOOK_URL` s celotnim hook URL-jem.
-5. V Settings → Secrets and variables → Actions → Variables dodajte repository
-   variable `RENDER_APP_URL`, npr. dejanski `https://ime-servisa.onrender.com`.
-   Enaki imeni lahko nastavite tudi v environment `production`.
-6. Združite naslednji PR v `main`. V Actions preverite obe preverjanji in
-   uspešno opravilo Deploy to Render, nato odprite aplikacijo in `/api/health`.
+Job `deploy` uporabi `actions/download-artifact`, preveri SHA in kopira vsebino
+artefakta na generirano vejo `deployment`. Na tej veji so samo datoteke za
+izvajanje; njen commit ne sproži CI, ker workflow posluša push le v `main`.
+Veja ni namenjena ročnemu razvoju izvorne kode.
 
-Renderjeva lastna samodejna namestitev je izključena (`autoDeployTrigger: off`),
-da spremembe ne obidejo GitHub preverjanj. Začetni uvoz Blueprinta lahko izvede
-prvo namestitev. Če prvi push v `main` steče pred nastavitvijo hooka, bo CI uspešen,
-deploy pa bo odpovedal z navodilom; po nastavitvi uporabite Re-run failed jobs.
+Render je povezan z vejo `deployment`. Njegov `buildCommand` je izključno
+`npm ci --prefix backend --omit=dev`: namesti izvajalne odvisnosti, ne prevaja
+aplikacije in ne zažene `tsc` ali `vite build`. `start-production.mjs` prebere
+izvorni SHA, izvede ponovljivo migracijo in zažene že prevedeni Express strežnik.
+Hook prejme točen commit generirane veje. Cevovod preveri javni HTML in
+`/api/health`, vključno z bazo in izvornim SHA.
 
-Za demonstracijo aplikacije na javni storitvi uporabljajte izključno izmišljene
-podatke. Prevzeti API še nima sej in preverjanja pravic (podrobnosti v pregledu
-projekta). Za pravo uporabo je treba te pomanjkljivosti odpraviti.
+Frontend in backend tečeta na istem javnem naslovu. Okoljska spremenljivka
+`VITE_API_URL=/api` je nastavljena med gradnjo frontenda; privzeta vrednost je
+enaka. Za ločeno gostovanje lahko vsebuje celotni URL backenda, npr.
+`https://backend.example/api`. Tu relativni URL uporablja isti javni izvor,
+zato ni potreben CORS.
+
+## Izključno brezplačno gostovanje
+
+`render.yaml` definira samo **Free** Node.js web service in **Free** PostgreSQL
+v Frankfurtu. Plačljivi paketi, diski, nadgradnje in samodejni prehodi na plačljivo
+storitev niso nastavljeni. Če Free paket ni na voljo, se namestitev ustavi.
+Render Free web service po neaktivnosti zaspi; prvi obisk ga ponovno zažene.
+Free PostgreSQL poteče po 30 dneh. Za nadaljevanje šolske predstavitve je pred
+potekom potreben izvoz podatkov in nova brezplačna postavitev; ta projekt ne
+aktivira plačljive nadgradnje.
+
+## GitHub nastavitve
+
+GitHub Actions so omogočene. Ustvarjeno je okolje `production`, ki dovoli
+namestitve samo z zaščitenih vej. Deploy hook sodi v **environment secret**
+`RENDER_DEPLOY_HOOK_URL`, javni URL pa v environment variable `RENDER_APP_URL`.
+Podatke baze Render hrani kot okoljske spremenljivke storitve, ne v kodi ali
+artefaktu. API ključ za začetno nastavitev ni potreben pri običajnem workflowu.
+
+Veja `main` zahteva PR ter uspešne status checks `lint`, `build`, `test`.
+Vklopljena sta zahteva po ažurni veji in uveljavljanje pravil tudi za administratorja;
+force push in brisanje veje nista dovoljena. Pri enem avtorju ni zahtevana
+odobritev drugega recenzenta. Pravila so preverjena prek GitHub API-ja.
+
+Dokaz namerno padajočega PR-ja in popravka je v `09-preverjanje-ci-cd.md`.
+
+## Aktivacija javne namestitve
+
+1. Job `build` mora izdelati artefakt. Iz njega se ob prvi postavitvi inicializira
+   veja `deployment`; kasneje jo vzdržuje samo job `deploy`.
+2. V Render računu ustvarite Blueprint iz `render.yaml` te izvorne veje.
+   Oba vira morata imeti paket **Free**. Web service bere vejo `deployment`.
+3. V [production secrets](https://github.com/Sarschi03/Solvex/settings/environments)
+   shranite `RENDER_DEPLOY_HOOK_URL`; v istem okolju nastavite `RENDER_APP_URL`.
+4. PR po uspehu obveznih preverjanj združite v `main`. Push sproži vse faze,
+   vključno z namestitvijo artefakta.
+5. Preverite `deploy`, javni URL in `/api/health`; dejanski URL dodajte v README.
+
+Samodejno Render nameščanje ob spremembi veje je izključeno. Začetno ustvarjanje
+storitve lahko sproži prvo namestitev; nadaljnje namestitve sproži GitHub Actions.
+Brez production secretov `deploy` jasno odpove. Dejanska javna namestitev še
+čaka na dostop do Render računa.
+
+Demo seed se v oblaku ne izvaja. Na javni šolski demonstraciji uporabljajte samo
+izmišljene podatke; omejitve avtentikacije so opisane v `07-pregled-projekta.md`.
 
 ## Lokalno preverjanje
 
-Po zagonu baze in pripravi `.env` v posamezni mapi:
-
 ```powershell
-cd backend
-npm ci
-npm run lint
-npm run build
-npm run db:migrate
-npm run db:migrate
-npm test
-cd ../frontend
-npm ci
-npm run lint
-npm run build
-npm test
+npm run lint --prefix frontend
+npm run lint --prefix backend
+npm run build --prefix frontend
+npm run build --prefix backend
+npm run test:coverage --prefix backend
+npm run test:coverage --prefix frontend
 ```
 
-Backend uporablja TypeScript 6.0.3, ker trenutni `typescript-eslint` podpira
-TypeScript pod 6.1; izvorni TypeScript 7 ni združljiv z njegovim peer dependency.
-`npm audit` je ob pregledu po varnih popravkih še poročal o zmernih opozorilih v
-razvojni odvisnosti `minimatch` prek `typescript-eslint`; prisilna nezdružljiva
-nadgradnja oziroma znižanje različic ni bilo uporabljeno.
+Backend uporablja TypeScript 6.0.3 zaradi združljivosti s `typescript-eslint`.
 
 ## Viri
 
 - [GitHub: PostgreSQL service containers](https://docs.github.com/en/actions/tutorials/use-containerized-services/create-postgresql-service-containers)
-- [Render: Blueprint specification](https://render.com/docs/blueprint-spec)
-- [Render: deploy hooks in GitHub Actions](https://render.com/docs/deploy-hooks)
+- [GitHub: environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+- [Render: Free omejitve](https://render.com/docs/free)
+- [Render: Blueprint](https://render.com/docs/blueprint-spec)
+- [Render: deploy hooks](https://render.com/docs/deploy-hooks)

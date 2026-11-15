@@ -573,7 +573,7 @@ router.post("/customers/register", async (request, response) => {
 router.get("/health", async (_request, response) => {
   try {
     await pool.query("SELECT 1");
-    response.status(200).json({ status: "ok", database: "connected", revision: process.env.RENDER_GIT_COMMIT ?? "local" });
+    response.status(200).json({ status: "ok", database: "connected", revision: process.env.APP_REVISION ?? process.env.RENDER_GIT_COMMIT ?? "local" });
   } catch (error) {
     console.error("Database connection failed:", error);
     response.status(503).json({ status: "error", database: "disconnected" });

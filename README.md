@@ -1,3 +1,5 @@
+[![CI/CD](https://github.com/Sarschi03/Solvex/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/Sarschi03/Solvex/actions/workflows/ci-cd.yml)
+
 ## Solvex - opis projekta
 Solvex je spletna rešitev za lastnike sončnih elektrarn, ki želijo prijaviti napako ali naročiti redni pregled svoje elektrarne. Serviserji preko sistema prejemajo delovne naloge, beležijo ugotovljene napake, opravljeno delo in pripravljajo poročila o servisih. Vodja servisa uporablja rešitev za razporejanje servisov, dodeljevanje nalog in spremljanje zaloge rezervnih delov. Sistem lastnikom omogoča tudi pregled zgodovine servisov in pridobivanje priporočil za prihodnje preglede.
 
@@ -16,6 +18,18 @@ Fork: [Sarschi03/Solvex](https://github.com/Sarschi03/Solvex).
 Pregled MVP in petih uporabniških zgodb: [docs/07-pregled-projekta.md](docs/07-pregled-projekta.md).
 GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](docs/08-ci-cd.md).
 
+
+### Faze cevovoda
+
+- `lint`: ESLint preveri frontend in backend; napake ustavijo cevovod.
+- `build`: TypeScript/Vite zgradita oba dela; `application-build` vsebuje prevedeno aplikacijo in podatke za zagon. Odvisnosti se predpomnijo z npm cache.
+- `test`: 11 API testov s PostgreSQL in 7 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
+- `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakt in objavi že prevedene datoteke na vejo `deployment`. Render namesti izvajalne odvisnosti in zažene aplikacijo brez ponovne gradnje.
+
+Javna aplikacija še ni aktivirana: za ustvarjanje brezplačne namestitve manjka dostop do Render računa. Dejanski javni URL bo dodan po uspešni namestitvi; lokalni URL ni javna namestitev.
+
+Uporabljena bosta izključno Render **Free** web service in **Free** PostgreSQL. Brezplačna baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve in stanje izvedbe so v [docs/08-ci-cd.md](docs/08-ci-cd.md).
+
 ## Zagon
 
 Potrebujete Node.js 24, npm in zagnan Docker Desktop. Iz korenske mape:
@@ -23,6 +37,7 @@ Potrebujete Node.js 24, npm in zagnan Docker Desktop. Iz korenske mape:
 ```powershell
 Copy-Item .env.example .env
 Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
 docker compose up -d --wait db
 cd backend
 npm ci

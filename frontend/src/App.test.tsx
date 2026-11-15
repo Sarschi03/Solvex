@@ -59,4 +59,23 @@ describe('Prijava zaposlenega', () => {
     await login()
     expect((await screen.findByRole('status')).textContent).toContain('Prijava ni uspela')
   })
+
+  it('ne pošlje obrazca brez obveznega gesla', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Službeni e-poštni naslov'), employee.email)
+    await user.click(screen.getByRole('button', { name: 'Prijava' }))
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect((screen.getByLabelText('Geslo') as HTMLInputElement).validity.valueMissing).toBe(true)
+  })
+
+  it('ob neveljavnem JSON odgovoru pokaže prijazno napako', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>Proxy error</html>', { status: 502 })))
+    render(<App />)
+    await login()
+    expect((await screen.findByRole('status')).textContent).toBe('Prijava ni uspela.')
+    expect(screen.getByRole('button', { name: 'Prijava' })).toHaveProperty('disabled', false)
+  })
 })

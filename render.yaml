@@ -1,13 +1,16 @@
+# Only Free compute plans. The database expires after 30 days; never upgrade automatically.
 services:
   - type: web
-    name: solvex
+    name: solvex-sarschi03
     runtime: node
     plan: free
     region: frankfurt
-    branch: main
+    repo: https://github.com/Sarschi03/Solvex
+    branch: deployment
     autoDeployTrigger: off
-    buildCommand: npm ci --prefix frontend --include=dev && npm run build --prefix frontend && npm ci --prefix backend --include=dev && npm run build --prefix backend
-    startCommand: npm run db:migrate --prefix backend && npm start --prefix backend
+    # The build job already compiled both applications. Install runtime deps only.
+    buildCommand: npm ci --prefix backend --omit=dev
+    startCommand: node backend/scripts/start-production.mjs
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
