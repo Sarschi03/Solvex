@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: solvex
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: npm ci --prefix frontend --include=dev && npm run build --prefix frontend && npm ci --prefix backend --include=dev && npm run build --prefix backend
+    startCommand: npm run db:migrate --prefix backend && npm start --prefix backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.0
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_FRONTEND
+        value: "true"
+      - key: DB_HOST
+        fromDatabase:
+          name: solvex-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: solvex-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: solvex-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: solvex-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: solvex-db
+          property: password
+
+databases:
+  - name: solvex-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "18"
+    databaseName: solvex
+    user: solvex
+    ipAllowList: []

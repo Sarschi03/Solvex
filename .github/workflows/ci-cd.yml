@@ -1,0 +1,128 @@
+name: CI/CD
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend - lint, build, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  backend:
+    name: Backend - lint, build, integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: solvex_ci
+          POSTGRES_USER: solvex
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U solvex -d solvex_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: solvex_ci
+      DB_USER: solvex
+      DB_PASSWORD: ci_only_password
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: Initialize schema and verify migration can run twice
+        run: |
+          npm run db:migrate
+          npm run db:migrate
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Render
+    needs: [frontend, backend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.RENDER_APP_URL }}
+    env:
+      DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      APP_URL: ${{ vars.RENDER_APP_URL }}
+      COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - name: Check deployment configuration
+        run: |
+          if [[ -z "$DEPLOY_HOOK" || -z "$APP_URL" ]]; then
+            echo "::error::Configure RENDER_DEPLOY_HOOK_URL secret and RENDER_APP_URL variable. See docs/08-ci-cd.md."
+            exit 1
+          fi
+      - name: Deploy the tested commit
+        run: |
+          separator='?'
+          [[ "$DEPLOY_HOOK" == *\?* ]] && separator='&'
+          curl --fail --silent --show-error --max-time 60 --request POST \
+            "${DEPLOY_HOOK}${separator}ref=${COMMIT_SHA}" --output /dev/null
+      - name: Verify deployed revision and database connection
+        run: |
+          for attempt in $(seq 1 48); do
+            if curl --fail --silent --max-time 15 "${APP_URL%/}/api/health" > /tmp/health.json; then
+              if jq -e --arg sha "$COMMIT_SHA" \
+                '.status == "ok" and .database == "connected" and .revision == $sha' /tmp/health.json > /dev/null; then
+                echo "Deployment verified: $COMMIT_SHA"
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "::error::The tested revision did not become healthy before the timeout."
+          exit 1

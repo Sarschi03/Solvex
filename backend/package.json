@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "lint": "eslint .",
+    "test": "tsx --test test/*.test.ts",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed:demo": "node scripts/seed-demo.mjs"
   },
   "keywords": [],
   "author": "",
@@ -19,10 +23,17 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }
