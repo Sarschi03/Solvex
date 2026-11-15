@@ -31,7 +31,11 @@ obvezne preverbe ni dovoljena za združitev. Dejanski poskus združitve ni bil p
 
 V naslednjem commitu je demonstracijska datoteka odstranjena. Dokaz napake ostaja
 v zgodovini commita in izvedbe; ni namenjen združitvi v končno stanje `main`.
-Ponovno preverjanje popravljenega PR-ja bo dodano po zaključku GitHub izvajanja.
+[Uspešna izvedba popravka #43733177043](https://github.com/Sarschi03/Solvex/actions/runs/43733177043)
+za commit `ce8717cd5c3224fadfe9a2cdfd0fc1d3f86c8e77` je zaključila `lint`,
+`build` in `test` z rezultatom **success**. `deploy` je pravilno preskočen za PR.
+GitHub je po popravku vrnil `mergeable_state: clean`. S tem sta dokumentirana
+dejanski padec z blokado in uspešen popravek istega PR-ja.
 
 ## Lokalno preverjeno
 
