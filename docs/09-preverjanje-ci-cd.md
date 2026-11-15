@@ -12,13 +12,26 @@ dovoljuje namestitve samo iz zaščitenih vej.
 
 ## Preizkus namerne napake
 
-V PR bo začasno dodana datoteka `frontend/src/ci-failure-demo.ts` z izrecnim
-tipom `any`. TypeScript jo lahko prevede, ESLint pravilo
-`@typescript-eslint/no-explicit-any` pa mora zavrniti job `lint`.
-Napaka ostane na razvojni veji in se ne združi v `main`.
+Na commitu `f6c92322cc9d23627b754a8a21db0e1039bbbf5d` je bila začasno dodana
+datoteka `frontend/src/ci-failure-demo.ts` z izrecnim tipom `any`.
+TypeScript jo je prevedel, ESLint pravilo `@typescript-eslint/no-explicit-any`
+pa je zavrnilo job `lint`.
 
-Po dejanskem neuspehu bo datoteka odstranjena, obvezne preverbe ponovno
-izvedene, tukaj pa zapisane povezave do obeh izvajanj in stanje blokade.
+[Neuspešna izvedba #43732707599](https://github.com/Sarschi03/Solvex/actions/runs/43732707599):
+
+- `lint`: **failure**; [neuspešen job](https://github.com/Sarschi03/Solvex/actions/runs/43732707599/job/132868485452).
+- `build`: **success**.
+- `test`: **success**, shranjen artefakt `coverage-reports`.
+- `deploy`: **skipped**, ker gre za PR.
+
+GitHub API je ob neuspešnem lintu vrnil `mergeable_state: blocked` za PR #1.
+Potrjena sta bila zahtevana statusa `lint`, `build`, `test` in `enforce_admins: true`.
+To dokazuje, da veja brez konfliktov (`mergeable: true`) zaradi neuspešne
+obvezne preverbe ni dovoljena za združitev. Dejanski poskus združitve ni bil potreben.
+
+V naslednjem commitu je demonstracijska datoteka odstranjena. Dokaz napake ostaja
+v zgodovini commita in izvedbe; ni namenjen združitvi v končno stanje `main`.
+Ponovno preverjanje popravljenega PR-ja bo dodano po zaključku GitHub izvajanja.
 
 ## Lokalno preverjeno
 
