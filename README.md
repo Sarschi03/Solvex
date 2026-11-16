@@ -1,3 +1,5 @@
+[![CI/CD](https://github.com/Sarschi03/Solvex/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/Sarschi03/Solvex/actions/workflows/ci-cd.yml)
+
 ## Solvex - opis projekta
 Solvex je spletna rešitev za lastnike sončnih elektrarn, ki želijo prijaviti napako ali naročiti redni pregled svoje elektrarne. Serviserji preko sistema prejemajo delovne naloge, beležijo ugotovljene napake, opravljeno delo in pripravljajo poročila o servisih. Vodja servisa uporablja rešitev za razporejanje servisov, dodeljevanje nalog in spremljanje zaloge rezervnih delov. Sistem lastnikom omogoča tudi pregled zgodovine servisov in pridobivanje priporočil za prihodnje preglede.
 
@@ -10,24 +12,66 @@ Solvex je spletna rešitev za lastnike sončnih elektrarn, ki želijo prijaviti 
 ## Povezava do dokumentacije
 https://github.com/lea250301/Solvex 
 
+## Prevzem projekta in CI/CD
+
+Fork: [Sarschi03/Solvex](https://github.com/Sarschi03/Solvex).
+Pregled MVP in petih uporabniških zgodb: [docs/07-pregled-projekta.md](docs/07-pregled-projekta.md).
+GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](docs/08-ci-cd.md).
+
+
+### Faze cevovoda
+
+- `lint`: ESLint preveri frontend in backend; napake ustavijo cevovod.
+- `build`: TypeScript/Vite zgradita oba dela; `application-build` vsebuje prevedeno aplikacijo in podatke za zagon. Odvisnosti se predpomnijo z npm cache.
+- `test`: 11 API testov s PostgreSQL in 7 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
+- `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakt in objavi že prevedene datoteke na vejo `deployment`. Render namesti izvajalne odvisnosti in zažene aplikacijo brez ponovne gradnje.
+
+Javna aplikacija še ni aktivirana: za ustvarjanje brezplačne namestitve manjka dostop do Render računa. Dejanski javni URL bo dodan po uspešni namestitvi; lokalni URL ni javna namestitev.
+
+Uporabljena bosta izključno Render **Free** web service in **Free** PostgreSQL. Brezplačna baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve in stanje izvedbe so v [docs/08-ci-cd.md](docs/08-ci-cd.md).
+
 ## Zagon
 
-Predpogoji: Docker Desktop, Node.js in npm.  
+Potrebujete Node.js 24, npm in zagnan Docker Desktop. Iz korenske mape:
 
-Pred zagonom ustvarite `.env` v korenski mapi in `backend/.env` z lokalnimi povezovalnimi podatki. Te datoteke ne dodajajte v Git.  
+```powershell
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
+docker compose up -d --wait db
+cd backend
+npm ci
+npm run db:migrate
+npm run db:seed:demo
+npm run dev
+```
 
-Zaženite bazo iz korenske mape projekta v terminalu:  
+V drugem terminalu:
 
-*docker compose up -d db*
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
 
-Backend zaženite v ločenem terminalu z:  
-    cd backend  
-    npm ci  
-    npm run dev  
+Odprite http://localhost:5173. Lokalna demo prijava je `demo@solvex.local` /
+`SolvexDemo123!`; seed je namenjen samo lokalni bazi in vsebuje izmišljene podatke.
+Baza je dostopna na `localhost:55432`, backend na `http://localhost:3000`,
+preverjanje povezave pa na `http://localhost:3000/api/health`.
+Datotek `.env` ne dodajajte v Git. Obstoječih `.env` ne prepisujte, temveč
+v njih prilagodite nastavitve po primerih.
 
-Frontend zaženite v ločenem terminalu z:  
-    cd frontend  
-    npm ci  
-    npm run dev   
+Za lokalno preverjanje produkcijskega načina najprej zgradite oba dela:
 
-Frontend je dostopen na http://localhost:5173, backend na http://localhost:3000.
+```powershell
+npm ci --prefix frontend
+npm run build --prefix frontend
+npm ci --prefix backend
+npm run build --prefix backend
+cd backend
+$env:SERVE_FRONTEND = 'true'
+npm start
+```
+
+Celotna aplikacija je nato dostopna na `http://localhost:3000`. Če na teh vratih
+že teče razvojni backend, ga pred produkcijskim zagonom ustavite.
