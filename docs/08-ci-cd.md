@@ -56,6 +56,10 @@ variable na dejanski Render izvor brez `/api`.
 
 ## Izključno brezplačno gostovanje
 
+Baza `solvex-db` je bila 16. 11. 2026 že ustvarjena in inicializirana na Render
+Free. Velja do 16. 12. 2026; podrobnosti so v `11-stanje-namestitve.md`.
+Pri naslednjih korakih uporabite obstoječo bazo in je ne ustvarjajte ponovno.
+
 `render.yaml` definira samo **Free** Node.js web service in **Free** PostgreSQL
 v Frankfurtu. Plačljivi paketi, diski, nadgradnje in samodejni prehodi na plačljivo
 storitev niso nastavljeni. Če Free paket ni na voljo, se namestitev ustavi.
@@ -95,8 +99,8 @@ Dokaz namerno padajočega PR-ja in popravka je v `09-preverjanje-ci-cd.md`.
 
 Samodejno Render nameščanje ob spremembi veje je izključeno. Začetno ustvarjanje
 storitve lahko sproži prvo namestitev; nadaljnje namestitve sproži GitHub Actions.
-Brez production secretov `deploy` jasno odpove. Dejanska javna namestitev še
-čaka na dostop do Render računa.
+Brez production secretov `deploy` jasno odpove. Baza je ustvarjena; za dejansko
+javno aplikacijo je še treba namestiti backend in povezati Vercel račun.
 
 Demo seed se v oblaku ne izvaja. Na javni šolski demonstraciji uporabljajte samo
 izmišljene podatke; omejitve avtentikacije so opisane v `07-pregled-projekta.md`.
