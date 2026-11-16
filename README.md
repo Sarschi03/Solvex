@@ -24,11 +24,21 @@ GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](d
 - `lint`: ESLint preveri frontend in backend; napake ustavijo cevovod.
 - `build`: TypeScript/Vite zgradita oba dela; `application-build` vsebuje prevedeno aplikacijo in podatke za zagon. Odvisnosti se predpomnijo z npm cache.
 - `test`: 11 API testov s PostgreSQL in 7 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
-- `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakt in objavi že prevedene datoteke na vejo `deployment`. Render namesti izvajalne odvisnosti in zažene aplikacijo brez ponovne gradnje.
+- `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakte in objavi že prevedeni backend na Render ter frontend na Vercel. Render namesti samo izvajalne odvisnosti, Vercel uporabi `--prebuilt`; aplikaciji se ne gradita ponovno.
 
-Javna aplikacija še ni aktivirana: za ustvarjanje brezplačne namestitve manjka dostop do Render računa. Dejanski javni URL bo dodan po uspešni namestitvi; lokalni URL ni javna namestitev.
+**Javna aplikacija: [solvex-henna.vercel.app](https://solvex-henna.vercel.app)**
 
-Uporabljena bosta izključno Render **Free** web service in **Free** PostgreSQL. Brezplačna baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve in stanje izvedbe so v [docs/08-ci-cd.md](docs/08-ci-cd.md).
+Backend: [solvex-api-sarschi03.onrender.com](https://solvex-api-sarschi03.onrender.com).
+[Preverjanje API-ja in baze](https://solvex-henna.vercel.app/api/health).
+PostgreSQL baza `solvex-db` je na Render Free in ima inicializirano shemo.
+[Stanje namestitve](docs/11-stanje-namestitve.md).
+
+Za šolski preizkus javne aplikacije: `demo@solvex.local` / `SolvexDemo123!`.
+Račun vsebuje izključno izmišljene demonstracijske podatke.
+
+Za oddajo na Moodle je pripravljena [oddaja.txt](oddaja.txt) z obema povezavama.
+
+Frontend bo objavljen na **Vercel Hobby**, backend na **Render Free**, baza pa bo **Free PostgreSQL**. Brezplačna Render baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve so v [docs/08-ci-cd.md](docs/08-ci-cd.md), prva objava frontenda pa v [docs/10-vercel-frontend.md](docs/10-vercel-frontend.md).
 
 ## Zagon
 

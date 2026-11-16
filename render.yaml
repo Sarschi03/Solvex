@@ -1,7 +1,7 @@
 # Only Free compute plans. The database expires after 30 days; never upgrade automatically.
 services:
   - type: web
-    name: solvex-sarschi03
+    name: solvex-api-sarschi03
     runtime: node
     plan: free
     region: frankfurt
