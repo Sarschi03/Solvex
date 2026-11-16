@@ -26,9 +26,9 @@ GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](d
 - `test`: 11 API testov s PostgreSQL in 7 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
 - `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakt in objavi že prevedene datoteke na vejo `deployment`. Render namesti izvajalne odvisnosti in zažene aplikacijo brez ponovne gradnje.
 
-Javna aplikacija še ni aktivirana: za ustvarjanje brezplačne namestitve manjka dostop do Render računa. Dejanski javni URL bo dodan po uspešni namestitvi; lokalni URL ni javna namestitev.
+Javna aplikacija še ni aktivirana: prva objava frontenda čaka na povezavo z Vercel računom, backend in baza pa na Render dostop. Dejanski javni URL bo dodan po uspešni objavi; lokalni URL ni javna namestitev.
 
-Uporabljena bosta izključno Render **Free** web service in **Free** PostgreSQL. Brezplačna baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve in stanje izvedbe so v [docs/08-ci-cd.md](docs/08-ci-cd.md).
+Frontend bo objavljen na **Vercel Hobby**, backend na **Render Free**, baza pa bo **Free PostgreSQL**. Brezplačna Render baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve so v [docs/08-ci-cd.md](docs/08-ci-cd.md), prva objava frontenda pa v [docs/10-vercel-frontend.md](docs/10-vercel-frontend.md).
 
 ## Zagon
 

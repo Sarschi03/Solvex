@@ -21,6 +21,12 @@ pokritost `App.tsx`, c8 pa `app.ts`; zagonski `server.ts` ni v imenovalcu.
 
 ## Namestitev iz artefakta brez ponovne gradnje
 
+Frontend se po novi izbiri objavi na **Vercel Hobby**, backend in baza pa ostaneta
+na **Render Free**. Job `build` dodatno pripravi artefakt `vercel-frontend` v Build
+Output API obliki. Job `deploy` ga po namestitvi backenda prenese in objavi z
+`vercel deploy --prebuilt --prod`; tudi frontend se ob namestitvi ne gradi znova.
+Podrobnosti prve, ločene objave so v `10-vercel-frontend.md`.
+
 Job `build` pripravi `application-build.tar.gz`, ki vsebuje:
 
 - `frontend/dist/` in `backend/dist/`,
@@ -40,11 +46,13 @@ izvorni SHA, izvede ponovljivo migracijo in zažene že prevedeni Express strež
 Hook prejme točen commit generirane veje. Cevovod preveri javni HTML in
 `/api/health`, vključno z bazo in izvornim SHA.
 
-Frontend in backend tečeta na istem javnem naslovu. Okoljska spremenljivka
+Frontendov Vercel naslov posreduje `/api` na Render backend. Okoljska spremenljivka
 `VITE_API_URL=/api` je nastavljena med gradnjo frontenda; privzeta vrednost je
 enaka. Za ločeno gostovanje lahko vsebuje celotni URL backenda, npr.
-`https://backend.example/api`. Tu relativni URL uporablja isti javni izvor,
-zato ni potreben CORS.
+`https://backend.example/api`. V trenutni postavitvi `BACKEND_ORIGIN` določi proxy
+v pripravljenem Vercel paketu, zato brskalnik uporablja isti javni izvor in ni
+potreben CORS. `BACKEND_ORIGIN` mora biti pred gradnjo nastavljen kot repository
+variable na dejanski Render izvor brez `/api`.
 
 ## Izključno brezplačno gostovanje
 
@@ -61,6 +69,8 @@ aktivira plačljive nadgradnje.
 GitHub Actions so omogočene. Ustvarjeno je okolje `production`, ki dovoli
 namestitve samo z zaščitenih vej. Deploy hook sodi v **environment secret**
 `RENDER_DEPLOY_HOOK_URL`, javni URL pa v environment variable `RENDER_APP_URL`.
+Za Vercel so v istem okolju potrebni secret `VERCEL_TOKEN` ter spremenljivke
+`VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_APP_URL`.
 Podatke baze Render hrani kot okoljske spremenljivke storitve, ne v kodi ali
 artefaktu. API ključ za začetno nastavitev ni potreben pri običajnem workflowu.
 

@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepare:vercel": "node scripts/prepare-vercel.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
