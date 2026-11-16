@@ -43,7 +43,7 @@ Render je povezan z vejo `deployment`. Njegov `buildCommand` je izključno
 `npm ci --prefix backend --omit=dev`: namesti izvajalne odvisnosti, ne prevaja
 aplikacije in ne zažene `tsc` ali `vite build`. `start-production.mjs` prebere
 izvorni SHA, izvede ponovljivo migracijo in zažene že prevedeni Express strežnik.
-Hook prejme točen commit generirane veje. Cevovod preveri javni HTML in
+Render API prejme točen commit generirane veje. Cevovod preveri javni HTML in
 `/api/health`, vključno z bazo in izvornim SHA.
 
 Frontendov Vercel naslov posreduje `/api` na Render backend. Okoljska spremenljivka
@@ -71,12 +71,13 @@ aktivira plačljive nadgradnje.
 ## GitHub nastavitve
 
 GitHub Actions so omogočene. Ustvarjeno je okolje `production`, ki dovoli
-namestitve samo z zaščitenih vej. Deploy hook sodi v **environment secret**
-`RENDER_DEPLOY_HOOK_URL`, javni URL pa v environment variable `RENDER_APP_URL`.
+namestitve samo z zaščitenih vej. Render API ključ sodi v **environment secret**
+`RENDER_API_KEY`, ID storitve v spremenljivko `RENDER_SERVICE_ID`, javni URL pa
+v environment variable `RENDER_APP_URL`.
 Za Vercel so v istem okolju potrebni secret `VERCEL_TOKEN` ter spremenljivke
 `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_APP_URL`.
 Podatke baze Render hrani kot okoljske spremenljivke storitve, ne v kodi ali
-artefaktu. API ključ za začetno nastavitev ni potreben pri običajnem workflowu.
+artefaktu. Workflow uporablja Render API ključ za namestitev točnega commita.
 
 Veja `main` zahteva PR ter uspešne status checks `lint`, `build`, `test`.
 Vklopljena sta zahteva po ažurni veji in uveljavljanje pravil tudi za administratorja;
@@ -92,17 +93,20 @@ Dokaz namerno padajočega PR-ja in popravka je v `09-preverjanje-ci-cd.md`.
 2. V Render računu ustvarite Blueprint iz `render.yaml` te izvorne veje.
    Oba vira morata imeti paket **Free**. Web service bere vejo `deployment`.
 3. V [production secrets](https://github.com/Sarschi03/Solvex/settings/environments)
-   shranite `RENDER_DEPLOY_HOOK_URL`; v istem okolju nastavite `RENDER_APP_URL`.
+   shranite `RENDER_API_KEY`; v istem okolju nastavite `RENDER_SERVICE_ID` in
+   `RENDER_APP_URL`. Vercel nastavitve so v `10-vercel-frontend.md`.
 4. PR po uspehu obveznih preverjanj združite v `main`. Push sproži vse faze,
    vključno z namestitvijo artefakta.
 5. Preverite `deploy`, javni URL in `/api/health`; dejanski URL dodajte v README.
 
 Samodejno Render nameščanje ob spremembi veje je izključeno. Začetno ustvarjanje
 storitve lahko sproži prvo namestitev; nadaljnje namestitve sproži GitHub Actions.
-Brez production secretov `deploy` jasno odpove. Baza je ustvarjena; za dejansko
-javno aplikacijo je še treba namestiti backend in povezati Vercel račun.
+Brez production secretov `deploy` jasno odpove. Baza in backend sta ustvarjena,
+Vercel pa je povezan z API-jem; javna aplikacija je na
+[solvex-henna.vercel.app](https://solvex-henna.vercel.app).
 
-Demo seed se v oblaku ne izvaja. Na javni šolski demonstraciji uporabljajte samo
+Demo seed se ob namestitvah ne izvaja. Ločeno so bili pripravljeni izmišljeni
+šolski podatki za preverjanje prijave in poročil. V aplikaciji uporabljajte samo
 izmišljene podatke; omejitve avtentikacije so opisane v `07-pregled-projekta.md`.
 
 ## Lokalno preverjanje
@@ -124,4 +128,4 @@ Backend uporablja TypeScript 6.0.3 zaradi združljivosti s `typescript-eslint`.
 - [GitHub: environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 - [Render: Free omejitve](https://render.com/docs/free)
 - [Render: Blueprint](https://render.com/docs/blueprint-spec)
-- [Render: deploy hooks](https://render.com/docs/deploy-hooks)
+- [Render: deploy API](https://api-docs.render.com/reference/create-deploy)

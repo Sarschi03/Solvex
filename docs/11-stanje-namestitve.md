@@ -19,14 +19,37 @@ Inicializirana je shema iz `database/schema.sql`, zabeležena kot
 Inicializacija je uporabila TLS s preverjanjem certifikata. Začasni zunanji dostop
 je po inicializaciji odstranjen (`ipAllowList: []`); baza je namenjena interni
 povezavi Render backenda. Povezovalni podatki in API ključ niso zapisani v Git.
-Lokalni ali osebni podatki niso bili preneseni v oblak.
+Lokalni ali osebni podatki niso bili preneseni v oblak. Dodani so izključno
+izmišljeni demonstracijski račun, elektrarna, dva servisa in testno poročilo.
 
-## Še potrebno za celotno aplikacijo
+## Backend na Render Free
 
-Frontend za Vercel Hobby je pripravljen, vendar še ni objavljen. Backend storitev
-še ni nameščena oziroma povezana z bazo. Sama baza nima uporabniškega javnega
-URL-ja aplikacije in ne nadomesti uspešnega joba `deploy`.
+Storitev `solvex-api-sarschi03` deluje na paketu **Free** v Frankfurtu:
 
-Po objavi backenda je treba nastaviti proxy `BACKEND_ORIGIN`, povezati Vercel
-račun, nastaviti GitHub environment secrets/variables, preveriti samodejno
-namestitev po združitvi PR-ja ter dodati javni URL v README in datoteko za oddajo.
+- [Backend](https://solvex-api-sarschi03.onrender.com).
+- [Render Dashboard](https://dashboard.render.com/web/srv-dbtd44hsrm7s73augpkg).
+- Baza je povezana prek internega Render naslova; geslo je v okolju storitve.
+- Veja `deployment` vsebuje artefakt uspešnega GitHub joba `build`.
+- Render izvaja samo `npm ci --omit=dev` in zagonski skript, brez novega prevajanja.
+- Lastne samodejne namestitve so izključene; nadaljnje objave sproži GitHub API korak.
+
+## Frontend in javno preverjanje
+
+[Javna aplikacija na Vercel Hobby](https://solvex-henna.vercel.app).
+
+API proxy uporablja `BACKEND_ORIGIN=https://solvex-api-sarschi03.onrender.com`.
+Javni `/api/health` potrjuje povezavo z bazo in vrne SHA izvorne različice.
+Preverjeni so prijava demo serviserja, dodeljeni servisi, ustvarjanje in urejanje
+poročila, oddaja ter zavrnitev urejanja zaklenjenega poročila (HTTP 409).
+
+Demo prijava: `demo@solvex.local` / `SolvexDemo123!`. To je javni šolski račun z
+izmišljenimi podatki; omejitve dostopa prevzete aplikacije so opisane v pregledu.
+
+## GitHub Actions in oddaja
+
+Okolje `production` vsebuje secrets `RENDER_API_KEY` in `VERCEL_TOKEN` ter
+spremenljivke za oba projekta in javna URL-ja. `BACKEND_ORIGIN` je tudi repository
+variable, ki jo uporablja job `build`. Vrednosti skrivnosti niso v Gitu.
+
+Datoteka `oddaja.txt` vsebuje povezavi do repozitorija in javne aplikacije ter
+je pripravljena za nalaganje na Moodle. Nalaganje na Moodle ni bilo izvedeno.

@@ -34,11 +34,14 @@ ne prikazuje HTML prijavne strani kot navidezno uspešen API odgovor.
 
 ## Račun in objava
 
-Potreben je dostop do uporabnikovega Vercel računa s paketom Hobby. Projekt naj
-ima korensko mapo `frontend`. Pri objavi s CLI se mapa poveže z Vercel projektom,
-nato se uporabi `vercel deploy --prebuilt --prod`. Mapa `.vercel` je prezrta v Gitu.
+Uporabljen je obstoječi projekt `solvex` na uporabnikovem paketu Hobby. Ker CI
+objavlja samostojen prebuilt paket, je Root Directory projekta prazen (`null`);
+dodatni prefiks `frontend` bi v začasnem paketu povzročil napačno pot.
+Node.js je nastavljen na `24.x`. Pri objavi s CLI se mapa s paketom poveže z
+Vercel projektom, nato se uporabi `vercel deploy --prebuilt --prod`.
+Mapa `.vercel` je prezrta v Gitu.
 
-`frontend/vercel.json` izključi samodejne Git namestitve, da te ne obidejo
+Korenski `vercel.json` in `frontend/vercel.json` izključita samodejne Git namestitve, da te ne obidejo
 preverjanj v GitHub Actions. Uvoz projekta prek GitHub povezave sam po sebi ni
 zamenjava za zahtevani deploy job, ki mora uporabljati že zgrajene artefakte.
 
@@ -49,7 +52,15 @@ Za CI/CD se v okolju GitHub `production` shranijo:
 - spremenljivka `VERCEL_APP_URL` z dejanskim javnim naslovom.
 
 API token se ne zapisuje v kodo. Vercel in GitHub povezava morata biti preverjeni
-pred označitvijo namestitve kot uspešne. Dejanski URL bo zabeležen po objavi.
+pred označitvijo namestitve kot uspešne.
+
+## Javna aplikacija
+
+[https://solvex-henna.vercel.app](https://solvex-henna.vercel.app)
+
+`BACKEND_ORIGIN` je nastavljen na `https://solvex-api-sarschi03.onrender.com`.
+Preverjeni so javni HTML in `/api/health` ter prijava, servisni seznam in zapis,
+urejanje in oddaja poročila prek povezave Vercel → Render → PostgreSQL.
 
 ## Viri
 
