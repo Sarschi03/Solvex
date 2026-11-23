@@ -85,3 +85,55 @@ npm start
 
 Celotna aplikacija je nato dostopna na `http://localhost:3000`. Če na teh vratih
 že teče razvojni backend, ga pred produkcijskim zagonom ustavite.
+
+## Agentno programiranje
+
+Uporabljamo **Codex CLI**. Po namestitvi CLI-ja in prijavi ga zaženemo iz korena
+projekta (Node.js 24 in npm morata biti na `PATH`):
+
+```powershell
+cd C:\Sara\Feri\RIRS\Solvex
+codex
+```
+
+Ob prvem zagonu preglejte projektne nastavitve in potrdite zaupanje projektu.
+Hooka preglejte v `/hooks`, povezavo z MCP pa v `/mcp`. Če konfiguracijo dodate
+med odprto sejo, ponovno zaženite Codex. Pred zagonom aplikacije pripravite lokalno
+bazo po razdelku »Zagon«. Za delo v varnem profilu podajte povezovalne spremenljivke
+`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` v okolje pred zagonom
+Codexa; agentu ne odpirajte dostopa do `.env`.
+
+### Datoteke za agenta
+
+- [AGENTS.md](AGENTS.md): ukazi, struktura, dokumentacija, konvencije in zaščiteni deli.
+- [.codex/config.toml](.codex/config.toml): varnostni profil in dejanska Codex MCP konfiguracija.
+- [.codex/hooks.json](.codex/hooks.json), `.codex/hooks/` in `.codex/rules/safety.rules`:
+  varovalke pred nevarnimi ukazi ter ESLint po spremembi izvorne kode.
+- [.mcp.json](.mcp.json): enaka definicija zagona Playwright strežnika za odjemalce,
+  ki berejo ta format; Codex uporablja `.codex/config.toml`. Codex omejitev orodij
+  se pri uvozu JSON v drugo orodje ne prenese samodejno.
+- [.agents/skills/solvex-api-endpoint/SKILL.md](.agents/skills/solvex-api-endpoint/SKILL.md):
+  postopek dodajanja ali spreminjanja Express API-ja.
+- [.agents/skills/solvex-tests/SKILL.md](.agents/skills/solvex-tests/SKILL.md):
+  API testi s PostgreSQL in testi React vmesnika.
+- `docs/05-uporabniske-zgodbe.md`, `docs/adr/` in `docs/07-pregled-projekta.md`:
+  zahteve, arhitekturne odločitve in dejansko stanje aplikacije.
+- `docs/specs/001-funkcionalnost/`: predloge `spec.md`, `plan.md`, `tasks.md`;
+  do izbire funkcionalnosti so prazne.
+- [docs/12-agentno-programiranje.md](docs/12-agentno-programiranje.md):
+  preverjanje MCP in predlog naslednje funkcionalnosti.
+
+### Playwright MCP in skilli
+
+Playwright MCP `@playwright/mcp@0.0.86` omogoča preverjanje lokalnega React vmesnika
+in njegove povezave z Express API-jem. Potrebuje nameščen Google Chrome; ob prvem
+zagonu `npx` prenese pripeto različico paketa. Ne potrebuje tokena ali gesla za MCP.
+Zažene se brez vidnega okna, z ločenim začasnim profilom in dovoljenimi lokalnimi
+origini. Seje osebnega brskalnika se ne uporabljajo. Seznam originov je omejitev
+zahtev, ne varnostna izolacija pred preusmeritvami. Izhodi `.playwright-mcp/` niso v Gitu.
+
+Po zagonu aplikacije lahko agentu naročite: »S Playwright MCP preveri lokalno
+prijavo in nalaganje servisov.« Uspešen dejanski preizkus je opisan v dokumentu 12.
+Za skilla uporabite `$solvex-api-endpoint` oziroma `$solvex-tests` v navodilu agentu;
+Codex ju lahko glede na opis izbere tudi sam. Pred predajo spremembe vedno izvede
+lint in teste obeh delov po `AGENTS.md`.
