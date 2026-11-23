@@ -118,6 +118,58 @@ Uspešno opravljeno:
 
 Spremembe so lokalne; v tej nalogi še ni bilo commita, pusha ali novega PR.
 
+## Uporaba skilla pri prenovi prijave — 23. 11. 2026
+
+Pri uporabnikovi zahtevi za prenovo prijave po slikovnem vzoru je agent prebral
+in uporabil `.agents/skills/solvex-tests/SKILL.md`. Prenovljena stran ohranja
+svetlo temo, obrazec postavi levo in fotografijo v grid desno, vključno z zelenim,
+črnim in belim kvadratkom. Izvorna fotografija je lokalni asset uporabnika.
+
+Frontend je razdeljen v `pages`, `components` in `hooks`, skupne TypeScript tipe
+ter API URL. Prijavna logika je v `useAuth`, pripeti servisi v `useServicePins`;
+dashboard se ob odjavi odmontira in ob novi prijavi obnovi uporabnikove pripete
+servise. Vsa aplikacijska logika uporablja `.ts` oziroma React `.tsx` datoteke.
+
+Po navodilih skilla sta dodana vedenjska testa za odjavo/ponovno prijavo in obnovo
+pripetih servisov po ponovni prijavi. Uporabljata Testing Library, `userEvent`,
+mock `fetch` in čiščenje lokalne shrambe. Obstoječih sedem scenarijev ostaja.
+Poročilo pokritosti zdaj vključuje tudi izvlečene strani, komponente in hooke.
+
+Lint in gradnja obeh delov sta uspešna; uspešnih je 9 frontend in 11 backend testov.
+Playwright MCP je preveril prikaz pri 1440 × 900 in 390 × 844; testni brskalnik je
+zaprt, lokalni posnetki so v ignorirani `.playwright-mcp/`. PR še ni ustvarjen;
+ob njegovi pripravi naj opis navede to uporabo skilla in ta preverjanja. Brez
+celotnih navodil točke 2.5 ne trdimo, da je prenova izpolnila vsa njena merila.
+
+## Nadzorna plošča lastnika — oblikovna predloga
+
+Lokalni naslov: `http://localhost:5173/#lastnik`. Referenca za obseg strani je
+`docs/06-wireframes.md` (Lastnik), za povezave do pregleda/okvare in priporočil
+pa US-01 do US-04 v `docs/05-uporabniske-zgodbe.md`.
+
+Pripravljeno v `frontend/src/pages/customer/`:
+
+- naslovna predloga s fotografijo, zamegljenim spodnjim delom, tremi povezavami
+  in tremi vzorčnimi vsebinskimi karticami;
+- prazne strani: elektrarne, trenutni servisi, zgodovina, koristne informacije,
+  priporočila, redni pregled in prijava okvare;
+- prazen profil uporablja obstoječi `ProfilePage.tsx`, dostopen samo prek avatarja.
+
+To je predloga brez podatkov lastnika in brez klicev zasebnega API-ja. Prijava
+lastnika, nalaganje elektrarn in oddaja zahtevkov niso implementirani. Prijava
+zaposlenega ostaja ločena; njegov dokumentirani koledar je dodan kot prazna stran.
+
+Skupni bel navigacijski stolpec uporablja ikone in označi aktivno stran s črno
+podlago/zeleno ikono; profil ni v navigaciji. Iskanje je v glavi ob avatarju.
+Pri zaposlenem filtrira servise oziroma poročila, pri vzorčni plošči lastnika
+pa povezave in vsebinske kartice. Zunanji okvir seznama in naslovna ločnica sta odstranjena.
+
+Po skillu `solvex-tests` so preverjeni prazni cilji navigacije, povezave,
+iskanje, vrnitev na prijavo ter odsotnost zasebnih zahtev na vzorčni poti.
+Uspešnih je 16 frontend in 11 backend testov ter lint in gradnja obeh delov.
+Dejanska uporaba Playwright MCP je potrdila namizni in mobilni prikaz, prehod na
+prazno stran elektrarn ter nič napak v konzoli. Brskalnik je po preverjanju zaprt.
+
 ## Viri
 
 - [Codex MCP konfiguracija](https://developers.openai.com/codex/mcp)

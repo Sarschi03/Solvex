@@ -45,7 +45,11 @@ in `npm run test:coverage --prefix backend`.
 
 ## Struktura projekta
 
-- `frontend/src/`: React/TypeScript vmesnik in CSS; testi `*.test.tsx` ob kodi.
+- `frontend/src/pages/`: prijava, registracija, dashboard, profil in koledar.
+- `frontend/src/pages/customer/`: predloga lastnika (`#lastnik`) in prazne dokumentirane strani.
+- `frontend/src/components/`: obrazci, grid, ikonska navigacija in glava z iskanjem.
+- `frontend/src/hooks/`: prijava in pripeti servisi; `types.ts` in `lib/`: tipi in API URL.
+- `frontend/src/`: React/TypeScript in CSS; testi `*.test.tsx` ob kodi oziroma `App.test.tsx`.
 - `frontend/public/`: javne statične datoteke; `frontend/scripts/`: priprava Vercel paketa.
 - `backend/src/app.ts`: Express API in povezava z bazo; `server.ts`: zagon strežnika.
 - `backend/test/`: integracijski API testi `*.test.ts`; `backend/scripts/`: migracija in zagon.
