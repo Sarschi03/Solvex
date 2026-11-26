@@ -56,6 +56,7 @@ export type Service = {
 }
 
 export type ServiceReport = {
+  customer_summary?: string | null
   performed_at?: string | null
   plant_condition?: 'operational' | 'limited' | 'not_operational' | null
   outcome?: 'resolved' | 'follow_up' | null

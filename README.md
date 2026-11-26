@@ -247,6 +247,12 @@ v [PR #3](https://github.com/Sarschi03/Solvex/pull/3). Zaloga je pripravljena lo
 
 ## Agentno programiranje
 
+Lastnikovi strani **Pretekli servisi** in **Priporočila** sta povezani s pravimi
+podatki. Zgodovina omogoča izbor elektrarne in prikaže javni povzetek brez
+internih poročil. Letni predlogi temeljijo samo na opravljenih rednih pregledih;
+lastnik jih lahko trajno izklopi. Potrebna je lokalna migracija 010.
+Podrobnosti: [US-03 in US-04](docs/specs/008-customer-history-recommendations/spec.md).
+
 Uporabljamo **Codex CLI**. Po namestitvi CLI-ja in prijavi ga zaženemo iz korena
 projekta (Node.js 24 in npm morata biti na `PATH`):
 

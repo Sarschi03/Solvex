@@ -5,7 +5,7 @@ import { assignedTo, leaderOf, positiveId, scheduleColumns } from "./assignmentA
 import { notify } from "./scheduling.js";
 import { consumeInventory, prepareInventoryParts, InventoryError } from "./inventory.js";
 
-const structured = 'sr.performed_at,sr.plant_condition,sr.outcome,sr.fault_found,sr.fault_cause,sr.parts_used';
+const structured = 'sr.customer_summary,sr.performed_at,sr.plant_condition,sr.outcome,sr.fault_found,sr.fault_cause,sr.parts_used';
 const reportColumns = `sr.id,sr.id_service,sr.work_summary,sr.findings,sr.recommendations,sr.reported_at,sr.submitted_at,${structured},s.service_type,sp.name AS solar_plant_name,e.first_name AS employee_first_name,e.last_name AS employee_last_name`;
 const reportJoin = 'FROM service_reports sr JOIN services s ON s.id=sr.id_service JOIN solar_plants sp ON sp.id_solar_plants=s.id_solar_plant JOIN employees e ON e.id=sr.id_employee';
 class InvalidReport extends Error {}
@@ -16,10 +16,11 @@ function optionalText(value: unknown, limit=4000): string | null {
   return value.trim() || null;
 }
 function reportData(body: Record<string,unknown>, old: Record<string,unknown> = {}) {
-  const allowed=['id_service','work_summary','findings','recommendations','reported_at','performed_at','plant_condition','outcome','fault_found','fault_cause','parts_used'];
+  const allowed=['id_service','work_summary','customer_summary','findings','recommendations','reported_at','performed_at','plant_condition','outcome','fault_found','fault_cause','parts_used'];
   if (Object.keys(body).some(key=>!allowed.includes(key))) fail('Poročilo vsebuje neznana polja.');
   const data={work_summary:'',findings:null,recommendations:null,performed_at:null,plant_condition:null,outcome:null,fault_found:null,fault_cause:null,parts_used:[],...old,...body} as Record<string,unknown>;
   const summary=optionalText(data.work_summary);
+  const customerSummary=optionalText(data.customer_summary);
   if(!summary) fail('Povzetek dela je obvezen.');
   const performed=data.performed_at instanceof Date?data.performed_at.toISOString():data.performed_at;
   if(performed!==null && (typeof performed!=='string'||!/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:\d{2})$/.test(performed)||!Number.isFinite(Date.parse(performed))||Date.parse(performed)>Date.now()+60000)) fail('Čas izvedbe mora biti veljaven in ne sme biti v prihodnosti.');
@@ -45,7 +46,7 @@ function reportData(body: Record<string,unknown>, old: Record<string,unknown> = 
     if(installed!==null&&(typeof installed!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(installed)||installed.startsWith('0000')||!Number.isFinite(Date.parse(`${installed}T00:00:00Z`))||new Date(`${installed}T00:00:00Z`).toISOString().slice(0,10)!==installed||installed>new Date().toISOString().slice(0,10))) return fail('Datum namestitve dela ni veljaven.');
     return {inventory_part_id:inventoryId,name,manufacturer,quantity:part.quantity,replaced,installed_on:installed};
   });
-  return {work_summary:summary,findings:optionalText(data.findings),recommendations:optionalText(data.recommendations),reported_at:reportedDate.toISOString(),performed_at:performed as string|null,plant_condition:data.plant_condition,outcome:data.outcome,fault_found:data.fault_found,fault_cause:optionalText(data.fault_cause,2000),parts_used:parts};
+  return {work_summary:summary,customer_summary:customerSummary,findings:optionalText(data.findings),recommendations:optionalText(data.recommendations),reported_at:reportedDate.toISOString(),performed_at:performed as string|null,plant_condition:data.plant_condition,outcome:data.outcome,fault_found:data.fault_found,fault_cause:optionalText(data.fault_cause,2000),parts_used:parts};
 }
 
 export function installTechnicianRoutes(router: Router,pool: Pool) {
@@ -97,6 +98,7 @@ export function installTechnicianRoutes(router: Router,pool: Pool) {
         const values=[data.work_summary,data.findings,data.recommendations,data.reported_at,data.performed_at,data.plant_condition,data.outcome,data.fault_found,data.fault_cause,JSON.stringify(data.parts_used)];
         if(editing) await client.query(`UPDATE service_reports SET work_summary=$2,findings=$3,recommendations=$4,reported_at=$5,performed_at=$6,plant_condition=$7,outcome=$8,fault_found=$9,fault_cause=$10,parts_used=$11 WHERE id=$1`,[id,...values]);
         else id=(await client.query(`INSERT INTO service_reports (id_service,id_employee,work_summary,findings,recommendations,reported_at,performed_at,plant_condition,outcome,fault_found,fault_cause,parts_used) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,[hint,employee,...values])).rows[0].id;
+        await client.query('UPDATE service_reports SET customer_summary=$2 WHERE id=$1',[id,data.customer_summary]);
         await client.query("UPDATE services SET status='in_progress' WHERE id=$1",[hint]);
       } else {
         if(old.inventory_posted_at) throw new InventoryError('Zaloga za to poročilo je že knjižena.');
