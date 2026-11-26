@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
 import "dotenv/config";
 import { Pool } from "pg";
 import argon2 from "argon2";
@@ -6,6 +6,7 @@ import path from "node:path";
 import { installProfileRoutes, startSession, requireSession, sessionAccount } from "./profiles.js";
 import { installStaffAccountRoutes } from "./staffAccounts.js";
 import { installManagerRoutes } from "./managerRoutes.js";
+import { installPlantRoutes } from "./plants.js";
 
 const app = express();
 const router = express.Router();
@@ -19,9 +20,17 @@ export const pool = new Pool({
 });
 
 app.use(express.json({ limit: "400kb" }));
+const jsonErrors: ErrorRequestHandler = (error: unknown, _request, response, next) => {
+  const type = (error as { type?: string })?.type;
+  if (type === "entity.parse.failed") return response.status(400).json({ message: "Pošlji veljavne podatke JSON." });
+  if (type === "entity.too.large") return response.status(413).json({ message: "Zahteva je prevelika." });
+  return next(error);
+};
+app.use(jsonErrors);
 installProfileRoutes(router, pool);
 installStaffAccountRoutes(router, pool);
 installManagerRoutes(router, pool);
+installPlantRoutes(router, pool);
 
 router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
   const account = sessionAccount(response);

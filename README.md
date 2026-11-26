@@ -89,6 +89,17 @@ Po posodobitvi kode zaženite `npm run db:migrate --prefix backend`; migracija
 podatkov. Migracija `003-manager-accounts-and-access` razširi seje in fotografije še
 na vodje servisa. Migraciji sta lokalno preverjeni tudi ob ponovitvi; produkcija v tem koraku ni spreminjana.
 
+### Moje elektrarne – API
+
+Backend omogoča seznam, dodajanje, ogled in delno urejanje elektrarn prijavljenega
+lastnika: `GET/POST /api/plants` ter `GET/PATCH /api/plants/:plantId`.
+Lastništvo se preverja po seji. Pred uporabo nove kode lokalno zaženite
+`npm run db:migrate --prefix backend` (migracija 004 doda proizvajalca in leto).
+Polja, primer zahteve, pravila validacije in statusi so v
+[`specifikaciji API-ja`](docs/specs/003-owner-plants/spec.md).
+Vmesnik »Moje elektrarne« še ni povezan; ta korak pripravi podatkovni predpogoj
+za US-01 in US-02, ne oddaje okvare ali rednega pregleda.
+
 ### Tri vrste računov
 
 Pri prijavi izberite **Lastnik**, **Zaposleni** (serviser) ali **Vodja servisa**.

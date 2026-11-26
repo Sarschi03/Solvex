@@ -83,6 +83,14 @@ SERVISER ||--o{ SERVIS : "izvaja"
 
 # Dopolnitev: profili in seje
 
+Migracija `004-owner-plants` razširi `solar_plants` z neobveznima poljema
+`manufacturer VARCHAR(100)` in `installation_year SMALLINT` (1–9999).
+Obstoječi `installed_on` ostaja datum namestitve; leto se mora z njim ujemati,
+kadar sta oba znana. Pri starejših zapisih se leto izpelje iz znanega datuma.
+API dovoljuje tudi samo leto, brez izmišljenega datuma. Podatki o moči, panelih,
+bateriji in lokaciji ostajajo v obstoječih stolpcih. Pravila in pogodba API so v
+[`specs/003-owner-plants/spec.md`](specs/003-owner-plants/spec.md).
+
 Migracija `002-user-profiles-and-sessions` v `database/schema.sql` doda:
 
 - `customers.profile_image_data` in `employees.profile_image_data`: neobvezna

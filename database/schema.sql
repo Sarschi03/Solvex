@@ -129,3 +129,12 @@ ALTER TABLE account_sessions DROP CONSTRAINT IF EXISTS account_sessions_check;
 ALTER TABLE account_sessions DROP CONSTRAINT IF EXISTS account_sessions_one_account_check;
 ALTER TABLE account_sessions ADD CONSTRAINT account_sessions_one_account_check
     CHECK (num_nonnulls(customer_id, employee_id, manager_id) = 1);
+
+-- migration: 004-owner-plants
+ALTER TABLE solar_plants ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(100);
+ALTER TABLE solar_plants ADD COLUMN IF NOT EXISTS installation_year SMALLINT
+    CHECK (installation_year BETWEEN 1 AND 9999);
+UPDATE solar_plants SET installation_year = EXTRACT(YEAR FROM installed_on)::smallint
+    WHERE installed_on IS NOT NULL AND installation_year IS NULL;
+ALTER TABLE solar_plants ADD CONSTRAINT solar_plants_installation_year_date_check
+    CHECK (installed_on IS NULL OR installation_year IS NULL OR installation_year = EXTRACT(YEAR FROM installed_on));
