@@ -1,5 +1,9 @@
 # Skupni temelj: računi, vloge in pooblastila
 
+Posodobitev: vloga se zdaj izbere samo ob registraciji. Enotni `/api/auth/login`
+jo ugotovi iz računa ob prijavi z e-pošto ali dodeljenim uporabniškim imenom.
+Migracija 005 in lokalni testni računi so opisani v README.
+
 ## Dogovorjeni obseg
 
 Uporabnik je 26. 11. 2026 izrecno izbral **odprto registracijo vseh treh vrst računov**

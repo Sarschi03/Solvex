@@ -51,9 +51,6 @@
   text-align: center;
 }
 .login-panel .login-form { gap: 22px; margin-top: 0; }
-.login-role-picker { display: flex; gap: 4px; min-width: 0; margin: 0; padding: 4px; border: 1px solid #e4e8dc; border-radius: var(--login-radius); }
-.login-role-picker button { flex: 1; height: 32px; border: 0; border-radius: calc(var(--login-radius) - 4px); background: transparent; color: #7c8670; font-size: 11px; cursor: pointer; }
-.login-role-picker button[aria-pressed='true'] { background: var(--accent-green); color: var(--accent-black); }
 .registration-roles { display: flex; gap: 14px; margin: 20px 0; font-size: 12px; }
 .registration-roles a { color: #69725d; text-underline-offset: 4px; }
 .registration-roles a[aria-current] { color: var(--accent-black); font-weight: 600; }

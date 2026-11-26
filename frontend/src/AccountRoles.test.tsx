@@ -11,6 +11,25 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('Registracije in ločeni delovni prostori', () => {
+  for (const [username, role, navigation] of [
+    ['lastnik', 'customer', 'Navigacija lastnika'],
+    ['zaposlen', 'employee', 'Navigacija zaposlenega'],
+    ['vodja', 'manager', 'Navigacija vodje servisa'],
+  ]) it(`uporabniško ime ${username} samodejno odpre pravi delovni prostor`, async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(Response.json(
+      url.endsWith('/auth/login') ? { account: { id: '10', first_name: username, last_name: 'Test', email: `${username}@solvex.local`, profile_image_data: null, role, service_type: 'electrical' } }
+        : { services: [], overview: { active_services: 0, pending_requests: 0, employees: 0, submitted_reports: 0 } },
+    )))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('E-pošta ali uporabniško ime'), username)
+    await user.type(screen.getByLabelText('Geslo'), 'geslo123')
+    await user.click(screen.getByRole('button', { name: 'Prijava' }))
+    expect(await screen.findByRole('navigation', { name: navigation })).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({ body: JSON.stringify({ identifier: username, password: 'geslo123' }) }))
+  })
+
   it('anonimna pot lastnika ne odpre zasebnega delovnega prostora', () => {
     window.history.replaceState(null, '', '#lastnik/profile')
     const fetchMock = vi.fn()
@@ -19,6 +38,9 @@ describe('Registracije in ločeni delovni prostori', () => {
     expect(screen.getByRole('heading', { name: 'Prijava v račun' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: 'Navigacija lastnika' })).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Lastnik' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Zaposleni' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Vodja servisa' })).toBeNull()
   })
 
   for (const [route, endpoint, label] of [
@@ -63,13 +85,12 @@ describe('Registracije in ločeni delovni prostori', () => {
     vi.stubGlobal('fetch', fetchMock)
     render(<App />)
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Vodja servisa' }))
-    await user.type(screen.getByLabelText('Službeni e-poštni naslov'), manager.email)
+    await user.type(screen.getByLabelText('E-pošta ali uporabniško ime'), manager.email)
     await user.type(screen.getByLabelText('Geslo'), 'Password123!')
     await user.click(screen.getByRole('button', { name: 'Prijava' }))
     expect(await screen.findByRole('navigation', { name: 'Navigacija vodje servisa' })).toBeTruthy()
     expect(await screen.findByText('Aktivni servisi')).toBeTruthy()
-    expect(fetchMock).toHaveBeenCalledWith('/api/managers/login', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({ method: 'POST' }))
     expect(fetchMock).toHaveBeenCalledWith('/api/managers/overview', expect.anything())
     expect(screen.queryByRole('button', { name: 'Novo poročilo' })).toBeNull()
   })

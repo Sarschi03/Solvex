@@ -138,3 +138,12 @@ UPDATE solar_plants SET installation_year = EXTRACT(YEAR FROM installed_on)::sma
     WHERE installed_on IS NOT NULL AND installation_year IS NULL;
 ALTER TABLE solar_plants ADD CONSTRAINT solar_plants_installation_year_date_check
     CHECK (installed_on IS NULL OR installation_year IS NULL OR installation_year = EXTRACT(YEAR FROM installed_on));
+
+-- migration: 005-account-usernames
+CREATE TABLE account_usernames (
+    username VARCHAR(64) PRIMARY KEY CHECK (username ~ '^[a-z0-9][a-z0-9_.-]{2,63}$'),
+    customer_id BIGINT UNIQUE REFERENCES customers(id) ON DELETE CASCADE,
+    employee_id BIGINT UNIQUE REFERENCES employees(id) ON DELETE CASCADE,
+    manager_id BIGINT UNIQUE REFERENCES managers(id) ON DELETE CASCADE,
+    CHECK (num_nonnulls(customer_id, employee_id, manager_id) = 1)
+);

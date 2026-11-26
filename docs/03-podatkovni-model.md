@@ -83,6 +83,12 @@ SERVISER ||--o{ SERVIS : "izvaja"
 
 # Dopolnitev: profili in seje
 
+Migracija `005-account-usernames` doda `account_usernames`: globalno enolično
+uporabniško ime in povezavo na točno enega lastnika, serviserja ali vodjo.
+Prijava `/api/auth/login` sprejme e-pošto ali dodeljeno uporabniško ime in iz
+shranjenega računa ugotovi vlogo. Izbira vloge je samo na registraciji.
+Obstoječi računi lahko še vedno uporabljajo e-pošto; migracija ne spreminja njihovih gesel.
+
 Migracija `004-owner-plants` razširi `solar_plants` z neobveznima poljema
 `manufacturer VARCHAR(100)` in `installation_year SMALLINT` (1–9999).
 Obstoječi `installed_on` ostaja datum namestitve; leto se mora z njim ujemati,

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react'
 import { apiBase } from '../lib/api'
-import type { Account, AccountRole, Employee } from '../types'
+import type { Account, Employee } from '../types'
 
 export function useAuth() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [account, setAccount] = useState<Account | null>(null)
-  const [role, setRole] = useState<AccountRole>('employee')
   const authenticatedOnServer = useRef(false)
   const restoreController = useRef<AbortController | null>(null)
   const [notice, setNotice] = useState('')
@@ -39,11 +38,10 @@ export function useAuth() {
     setNotice('')
     setIsSubmitting(true)
     try {
-      const endpoint = { customer: 'customers', employee: 'employees', manager: 'managers' }[role]
-      const response = await fetch(`${apiBase}/${endpoint}/login`, {
+      const response = await fetch(`${apiBase}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier: email, password }),
       })
       const result = (await response.json().catch(() => ({}))) as {
         message?: string
@@ -97,7 +95,7 @@ export function useAuth() {
     setAccount(current => current?.id === next.id && current.role === next.role ? next : current)
   }, [])
 
-  return { email, setEmail, password, setPassword, employee, account, setAccount: updateAccount, role, setRole, notice, isSubmitting, login, logout }
+  return { email, setEmail, password, setPassword, employee, account, setAccount: updateAccount, notice, isSubmitting, login, logout }
 }
 
 export type AuthState = ReturnType<typeof useAuth>

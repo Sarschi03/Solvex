@@ -7,7 +7,7 @@ const employee = { id: '1', first_name: 'Test', last_name: 'Serviser', email: 't
 
 async function login() {
   const user = userEvent.setup()
-  await user.type(screen.getByLabelText('Službeni e-poštni naslov'), employee.email)
+  await user.type(screen.getByLabelText('E-pošta ali uporabniško ime'), employee.email)
   await user.type(screen.getByLabelText('Geslo'), 'TestPassword123!')
   await user.click(screen.getByRole('button', { name: 'Prijava' }))
   return user
@@ -52,7 +52,7 @@ describe('Prijava zaposlenega', () => {
     render(<App />)
     await login()
     expect(await screen.findByRole('heading', { name: 'Živjo, Test!' })).toBeTruthy()
-    expect(fetchMock).toHaveBeenCalledWith('/api/employees/login', expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: employee.email, password: 'TestPassword123!' }) }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({ method: 'POST', body: JSON.stringify({ identifier: employee.email, password: 'TestPassword123!' }) }))
     expect(fetchMock).toHaveBeenCalledWith('/api/employees/1/services', expect.anything())
   })
 
@@ -111,7 +111,7 @@ describe('Prijava zaposlenega', () => {
     render(<App />)
     const user = await login()
     await user.click(await screen.findByRole('button', { name: 'Odjava' }))
-    expect(screen.getByLabelText('Službeni e-poštni naslov')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('E-pošta ali uporabniško ime')).toHaveProperty('value', '')
     expect(screen.getByLabelText('Geslo')).toHaveProperty('value', '')
     await login()
     expect(await screen.findByRole('heading', { name: 'Živjo, Test!' })).toBeTruthy()
@@ -142,7 +142,7 @@ describe('Prijava zaposlenega', () => {
     vi.stubGlobal('fetch', fetchMock)
     render(<App />)
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText('Službeni e-poštni naslov'), employee.email)
+    await user.type(screen.getByLabelText('E-pošta ali uporabniško ime'), employee.email)
     await user.click(screen.getByRole('button', { name: 'Prijava' }))
     expect(fetchMock).not.toHaveBeenCalled()
     expect((screen.getByLabelText('Geslo') as HTMLInputElement).validity.valueMissing).toBe(true)

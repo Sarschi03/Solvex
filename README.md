@@ -66,9 +66,9 @@ Generirani izhodi, dnevniki, odvisnosti in lokalne skrivnosti niso namenjeni dod
 ### Nadzorna plošča in profil lastnika
 
 Po lokalnem zagonu odprite [nadzorno ploščo lastnika](http://localhost:5173/#lastnik).
-Povezava zahteva prijavo. Na prijavni strani izberite **Lastnik** in se prijavite.
-Lokalni demo: `demo-owner@solvex.local` / `SolvexDemo123!`. Za zaposlenega izberite
-**Zaposleni**; njegova prijava še vedno odpre ločen delovni prostor.
+Povezava zahteva prijavo. Vpišite e-pošto ali uporabniško ime in geslo; vloga se ugotovi iz računa.
+Lokalni demo: `demo-owner@solvex.local` / `SolvexDemo123!`. Za zaposlenega vpišite
+e-pošto zaposlenega; njegova prijava odpre ločen delovni prostor.
 
 Na podlagi `docs/06-wireframes.md` so pripravljene prazne strani za elektrarne,
 trenutne servise, pretekle servise in koristne informacije. Profil prek avatarja
@@ -102,12 +102,29 @@ za US-01 in US-02, ne oddaje okvare ali rednega pregleda.
 
 ### Tri vrste računov
 
-Pri prijavi izberite **Lastnik**, **Zaposleni** (serviser) ali **Vodja servisa**.
+Pri prijavi ni izbire vloge. Skupni `POST /api/auth/login` sprejme `{ identifier, password }`
+in vrne račun z vlogo, določeno ob registraciji. `identifier` je e-pošta ali dodeljeno
+uporabniško ime; spremenjena vloga v zahtevi ne vpliva na prijavo.
 Na strani Registracija so trije ločeni obrazci:
 `#registracija/lastnik`, `#registracija/serviser` in `#registracija/vodja`.
 Po izrecni odločitvi za ta šolski projekt je registracija vseh treh vrst javna,
 brez vabil ali potrjevanja. Vloga se določi na strežniku glede na registracijsko pot;
 polje `role` v zahtevi ne spremeni pravic. E-pošta je enolična znotraj vrste računa.
+Če imajo stari računi različnih vrst enako e-pošto in geslo, skupna prijava vrne 409;
+ne izbere privilegirane vloge po vrstnem redu tabel. Enolično uporabniško ime razreši tak primer.
+
+Lokalni testni računi, zahtevani za preizkušanje:
+
+| Uporabniško ime | Geslo | Vloga |
+| --- | --- | --- |
+| `lastnik` | `geslo123` | Lastnik |
+| `zaposlen` | `geslo123` | Serviser |
+| `vodja` | `geslo123` | Vodja servisa |
+
+Po migraciji `005-account-usernames` jih ustvari `npm run db:seed:accounts --prefix backend`.
+Ukaz deluje samo proti lokalni bazi, je ponovljiv in ne prepisuje obstoječih računov.
+Uporabniška imena so v skupni tabeli `account_usernames`, povezana s točno enim računom;
+gesla se shranijo kot Argon2 hash. Ti testni računi niso bili ustvarjeni v produkciji.
 
 | Račun | Trenutno dostopno |
 | --- | --- |

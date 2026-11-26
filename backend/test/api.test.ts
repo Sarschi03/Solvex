@@ -78,6 +78,56 @@ async function customerSession() {
 
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 
+describe('Enotna prijava brez izbire vloge', () => {
+  const password = 'TestPassword123!';
+  const roles = [['customer', 'customers', 'customer_id'], ['employee', 'employees', 'employee_id'], ['manager', 'managers', 'manager_id']] as const;
+  before(async () => {
+    for (const [role, endpoint, column] of roles) {
+      const created = await accountRequest(`/${endpoint}/register`, undefined, 'POST', {
+        firstName: 'Enotna', lastName: 'Prijava', email: `login-${role}@test.si`, password,
+        address: 'Test 1', postalCode: '2000', city: 'Maribor', phone: '040000000', serviceType: 'electrical',
+      });
+      assert.equal(created.status, 201);
+      const id = created.body.account?.id ?? created.body.customer.id;
+      await pool.query(`INSERT INTO account_usernames (username,${column}) VALUES ($1,$2)`, [`login-${role}`, id]);
+    }
+  });
+  it('pri vseh treh vrstah ugotovi vlogo iz računa, po e-pošti ali uporabniškem imenu', async () => {
+    for (const [role] of roles) for (const identifier of [` LOGIN-${role.toUpperCase()}@TEST.SI `, `login-${role}`]) {
+      const login = await accountRequest('/auth/login', undefined, 'POST', { identifier, password, role: 'manager' });
+      assert.equal(login.status, 200);
+      assert.equal(login.body.account.role, role);
+      assert.equal(login.body.account.password_hash, undefined);
+      assert.match(login.cookie!, /HttpOnly/);
+      const cookie = login.cookie!.split(';')[0];
+      assert.equal((await accountRequest('/auth/me', cookie)).body.account.role, role);
+      await accountRequest('/auth/logout', cookie, 'POST');
+      assert.equal((await accountRequest('/auth/me', cookie)).status, 401);
+    }
+  });
+  it('napačni podatki ne izdajo seje ali podatkov računa', async () => {
+    for (const identifier of ['login-customer', 'missing-user']) {
+      const login = await accountRequest('/auth/login', undefined, 'POST', { identifier, password: 'wrong' });
+      assert.equal(login.status, 401);
+      assert.equal(login.cookie, null);
+      assert.equal(login.body.account, undefined);
+    }
+    for (const body of [{}, { identifier: 1, password }, { identifier: 'x'.repeat(255), password }, { identifier: 'login-customer', password: 'x'.repeat(129) }]) assert.equal((await accountRequest('/auth/login', undefined, 'POST', body)).status, 400);
+  });
+  it('pri starih enakih podatkih več vlog ne izbere samovoljno privilegirane vloge', async () => {
+    const hash = await argon2.hash(password);
+    const owner = await pool.query("INSERT INTO customers (first_name,last_name,email,password_hash,address,postal_code,city) VALUES ('Test','Enak','same-login@test.si',$1,'Test 1','2000','Maribor') RETURNING id", [hash]);
+    const manager = await pool.query("INSERT INTO managers (first_name,last_name,email,password_hash,phone) VALUES ('Test','Enak','same-login@test.si',$1,'000') RETURNING id", [hash]);
+    const ambiguous = await accountRequest('/auth/login', undefined, 'POST', { identifier: 'same-login@test.si', password });
+    assert.equal(ambiguous.status, 409);
+    assert.equal(ambiguous.cookie, null);
+    await pool.query('INSERT INTO account_usernames (username,customer_id) VALUES ($1,$2)', ['unique-owner', owner.rows[0].id]);
+    await pool.query('INSERT INTO account_usernames (username,manager_id) VALUES ($1,$2)', ['unique-manager', manager.rows[0].id]);
+    assert.equal((await accountRequest('/auth/login', undefined, 'POST', { identifier: 'unique-owner', password })).body.account.role, 'customer');
+    assert.equal((await accountRequest('/auth/login', undefined, 'POST', { identifier: 'unique-manager', password })).body.account.role, 'manager');
+  });
+});
+
 describe('Moje elektrarne: lastništvo, podatki in urejanje', () => {
   let ownerCookie: string;
   let otherCookie: string;

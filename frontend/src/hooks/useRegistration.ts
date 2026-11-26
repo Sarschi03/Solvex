@@ -28,7 +28,7 @@ export function useRegistration(role: AccountRole = 'customer') {
       form.reset()
       setRegistered(true)
       const label = { customer: 'Lastnik', employee: 'Zaposleni', manager: 'Vodja servisa' }[role]
-      setNotice(`Račun je ustvarjen. V prijavi izberi ${label} in se vpiši z novim računom.`)
+      setNotice(`Račun je ustvarjen (${label}). Prijavi se z e-pošto in geslom.`)
     } catch {
       setNotice('Backend trenutno ni dosegljiv. Poskusi znova.')
     } finally {
