@@ -51,7 +51,7 @@
   text-align: center;
 }
 .login-panel .login-form { width: 100%; max-width: 280px; gap: 20px; margin: 0 auto; }
-.registration-roles { display: flex; gap: 14px; margin: 20px 0; font-size: 12px; }
+.registration-roles { display: flex; justify-content: center; gap: 14px; margin: 20px 0; font-size: 12px; }
 .registration-roles a { color: #69725d; text-underline-offset: 4px; }
 .registration-roles a[aria-current] { color: var(--accent-black); font-weight: 600; }
 .registration-form select { width: 100%; height: 40px; padding: 0 12px; border: 1px solid #dee3d5; border-radius: var(--login-radius); background: transparent; color: inherit; font: inherit; font-size: 13px; }
