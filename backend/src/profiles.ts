@@ -1,9 +1,10 @@
-import type { Request, Response, Router } from "express";
+import type { Request, Response, Router, RequestHandler } from "express";
 import type { Pool } from "pg";
 import { createHash, randomBytes } from "node:crypto";
 import argon2 from "argon2";
 
-type Role = "customer" | "employee";
+export type Role = "customer" | "employee" | "manager";
+export type Account = { id: string; first_name: string; last_name: string; email: string; profile_image_data: string | null; role: Role; service_type?: string };
 const cookieName = "solvex_session";
 const sessionSeconds = 60 * 60 * 24 * 7;
 
@@ -19,22 +20,46 @@ function tokenHash(request: Request) {
 export async function startSession(request: Request, response: Response, pool: Pool, role: Role, id: string) {
   const token = randomBytes(32).toString("hex");
   const hash = createHash("sha256").update(token).digest("hex");
-  const column = role === "customer" ? "customer_id" : "employee_id";
+  const column = { customer: "customer_id", employee: "employee_id", manager: "manager_id" }[role];
   await pool.query(`INSERT INTO account_sessions (token_hash, ${column}, expires_at) VALUES ($1, $2, NOW() + INTERVAL '7 days')`, [hash, id]);
   response.cookie(cookieName, token, { ...cookieOptions(request), maxAge: sessionSeconds * 1000 });
 }
 
-async function getAccount(request: Request, pool: Pool) {
+export async function getAccount(request: Request, pool: Pool): Promise<Account | null> {
   const hash = tokenHash(request);
   if (!hash) return null;
-  const session = await pool.query("SELECT customer_id, employee_id FROM account_sessions WHERE token_hash = $1 AND expires_at > NOW()", [hash]);
+  const session = await pool.query("SELECT customer_id, employee_id, manager_id FROM account_sessions WHERE token_hash = $1 AND expires_at > NOW()", [hash]);
   if (!session.rows[0]) return null;
-  const role: Role = session.rows[0].customer_id ? "customer" : "employee";
-  const id = session.rows[0].customer_id ?? session.rows[0].employee_id;
-  const table = role === "customer" ? "customers" : "employees";
+  const role: Role = session.rows[0].customer_id ? "customer" : session.rows[0].employee_id ? "employee" : "manager";
+  const id = session.rows[0].customer_id ?? session.rows[0].employee_id ?? session.rows[0].manager_id;
+  const table = { customer: "customers", employee: "employees", manager: "managers" }[role];
   const extra = role === "employee" ? ", service_type" : "";
   const result = await pool.query(`SELECT id, first_name, last_name, email, profile_image_data${extra} FROM ${table} WHERE id = $1`, [id]);
   return result.rows[0] ? { ...result.rows[0], role } : null;
+}
+
+export function sessionAccount(response: Response): Account {
+  return response.locals.account as Account;
+}
+
+export function requireSession(pool: Pool, roles: Role[], matchEmployee = false): RequestHandler {
+  return async (request, response, next) => {
+    response.set("Cache-Control", "no-store");
+    try {
+      const account = await getAccount(request, pool);
+      if (!account) { response.status(401).json({ message: "Za dostop se prijavi." }); return; }
+      if (!roles.includes(account.role)) { response.status(403).json({ message: "Za to dejanje nimaš dovoljenja." }); return; }
+      if (matchEmployee) {
+        const employeeId = request.params.employeeId;
+        if (typeof employeeId !== "string" || !/^[1-9]\d*$/.test(employeeId)) { response.status(400).json({ message: "ID zaposlenega ni veljaven." }); return; }
+        if (account.role === "employee" && account.id !== employeeId) { response.status(403).json({ message: "Dostopaš lahko samo do svojih nalog in poročil." }); return; }
+      }
+      response.locals.account = account;
+      next();
+    } catch {
+      response.status(500).json({ message: "Dovoljenj ni bilo mogoče preveriti." });
+    }
+  };
 }
 
 function validImage(image: unknown) {
@@ -93,7 +118,7 @@ export function installProfileRoutes(router: Router, pool: Pool) {
     try {
       const account = await getAccount(request, pool);
       if (!account) return response.status(401).json({ message: "Za ogled profila se prijavi." });
-      if (account.role === "employee") return response.json({ account, plants: [], services: [] });
+      if (account.role !== "customer") return response.json({ account, plants: [], services: [] });
       const plants = await pool.query(`SELECT id_solar_plants AS id, name, installation_address, postal_code, city, installed_capacity_kw, panel_count FROM solar_plants WHERE id_customer = $1 ORDER BY id_solar_plants`, [account.id]);
       const services = await pool.query(`SELECT s.id, s.service_type, s.completed_at, s.scheduled_at, sp.name AS solar_plant_name
         FROM services s JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
@@ -113,7 +138,7 @@ export function installProfileRoutes(router: Router, pool: Pool) {
       if (!account) return response.status(401).json({ message: "Za spremembo fotografije se prijavi." });
       const image: unknown = request.body?.image;
       if (!validImage(image)) return response.status(400).json({ message: "Izberi PNG, JPEG ali WebP sliko do 256 KB." });
-      const table = account.role === "customer" ? "customers" : "employees";
+      const table = { customer: "customers", employee: "employees", manager: "managers" }[account.role];
       await pool.query(`UPDATE ${table} SET profile_image_data = $1 WHERE id = $2`, [image, account.id]);
       return response.json({ account: { ...account, profile_image_data: image } });
     } catch {

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react'
 import { apiBase } from '../lib/api'
-import type { Account, Employee } from '../types'
+import type { Account, AccountRole, Employee } from '../types'
 
 export function useAuth() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [account, setAccount] = useState<Account | null>(null)
-  const [role, setRole] = useState<'customer' | 'employee'>('employee')
+  const [role, setRole] = useState<AccountRole>('employee')
   const authenticatedOnServer = useRef(false)
   const restoreController = useRef<AbortController | null>(null)
   const [notice, setNotice] = useState('')
@@ -39,7 +39,8 @@ export function useAuth() {
     setNotice('')
     setIsSubmitting(true)
     try {
-      const response = await fetch(`${apiBase}/${role === 'customer' ? 'customers' : 'employees'}/login`, {
+      const endpoint = { customer: 'customers', employee: 'employees', manager: 'managers' }[role]
+      const response = await fetch(`${apiBase}/${endpoint}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

@@ -36,7 +36,7 @@ export default function ProfilePage({ account, onAccountChange }: { account: Acc
       {notice && <p className="profile-status" role="status">{notice}</p>}
       {loading && <p className="profile-status" role="status">Nalaganje profila ...</p>}
       {error && <p className="profile-status profile-error" role="alert">{error}</p>}
-      {account?.role !== 'employee' && <>
+      {account?.role === 'customer' && <>
         <section className="profile-house-card" aria-labelledby="house-title">
           <div className="profile-section-heading"><h2 id="house-title">Vaš dom, vaša energija</h2>
             {plants.length > 1 && <select aria-label="Izberi elektrarno" value={plant?.id ?? ''} onChange={(event) => setPlantId(event.target.value)}>{plants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}

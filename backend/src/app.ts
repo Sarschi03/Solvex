@@ -3,7 +3,9 @@ import "dotenv/config";
 import { Pool } from "pg";
 import argon2 from "argon2";
 import path from "node:path";
-import { installProfileRoutes, startSession } from "./profiles.js";
+import { installProfileRoutes, startSession, requireSession, sessionAccount } from "./profiles.js";
+import { installStaffAccountRoutes } from "./staffAccounts.js";
+import { installManagerRoutes } from "./managerRoutes.js";
 
 const app = express();
 const router = express.Router();
@@ -18,8 +20,11 @@ export const pool = new Pool({
 
 app.use(express.json({ limit: "400kb" }));
 installProfileRoutes(router, pool);
+installStaffAccountRoutes(router, pool);
+installManagerRoutes(router, pool);
 
-router.get("/services", async (_request, response) => {
+router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
+  const account = sessionAccount(response);
   try {
     const result = await pool.query(
       `SELECT
@@ -42,7 +47,9 @@ router.get("/services", async (_request, response) => {
       JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
       JOIN customers c ON c.id = sp.id_customer
       LEFT JOIN employees e ON e.id = s.id_employee
-      ORDER BY s.scheduled_at NULLS LAST, s.id DESC`,
+      WHERE ($1::bigint IS NULL OR s.id_employee = $1)
+      ORDER BY CASE s.urgency WHEN 'nujno' THEN 0 WHEN 'resno' THEN 1 ELSE 2 END, s.scheduled_at NULLS LAST, s.id DESC`,
+      [account.role === "employee" ? account.id : null],
     );
 
     return response.status(200).json({ services: result.rows });
@@ -55,10 +62,10 @@ router.get("/services", async (_request, response) => {
   }
 });
 
-router.get("/employees/:employeeId/services", async (request, response) => {
+router.get("/employees/:employeeId/services", requireSession(pool, ["employee", "manager"], true), async (request, response) => {
   const { employeeId } = request.params;
 
-  if (!/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
+  if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
     return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
   }
 
@@ -99,10 +106,10 @@ router.get("/employees/:employeeId/services", async (request, response) => {
   }
 });
 
-router.get("/employees/:employeeId/service-reports", async (request, response) => {
+router.get("/employees/:employeeId/service-reports", requireSession(pool, ["employee", "manager"], true), async (request, response) => {
   const { employeeId } = request.params;
 
-  if (!/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
+  if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
     return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
   }
 
@@ -125,8 +132,10 @@ router.get("/employees/:employeeId/service-reports", async (request, response) =
       JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
       JOIN employees e ON e.id = sr.id_employee
       WHERE sr.id_employee = $1
+        AND ($2::boolean OR s.id_employee = $1)
+        AND (NOT $2::boolean OR sr.submitted_at IS NOT NULL)
       ORDER BY sr.reported_at DESC, sr.id DESC`,
-      [employeeId],
+      [employeeId, sessionAccount(response).role === "manager"],
     );
 
     return response.status(200).json({ reports: result.rows });
@@ -139,7 +148,7 @@ router.get("/employees/:employeeId/service-reports", async (request, response) =
   }
 });
 
-router.post("/employees/:employeeId/service-reports", async (request, response) => {
+router.post("/employees/:employeeId/service-reports", requireSession(pool, ["employee"], true), async (request, response) => {
   const { employeeId } = request.params;
   const body = (request.body ?? {}) as Record<string, unknown>;
   const serviceId =
@@ -159,7 +168,7 @@ router.post("/employees/:employeeId/service-reports", async (request, response) 
       ? new Date(body.reported_at)
       : null;
 
-  if (!/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
+  if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
     return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
   }
 
@@ -239,6 +248,7 @@ router.post("/employees/:employeeId/service-reports", async (request, response) 
 
 router.put(
   "/employees/:employeeId/service-reports/:reportId",
+  requireSession(pool, ["employee"], true),
   async (request, response) => {
     const { employeeId, reportId } = request.params;
     const body = (request.body ?? {}) as Record<string, unknown>;
@@ -255,11 +265,11 @@ router.put(
         ? new Date(body.reported_at)
         : null;
 
-    if (!/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
+    if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
       return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
     }
 
-    if (!/^\d+$/.test(reportId) || /^0+$/.test(reportId)) {
+    if (typeof reportId !== "string" || !/^\d+$/.test(reportId) || /^0+$/.test(reportId)) {
       return response.status(400).json({ message: "ID poročila ni veljaven." });
     }
 
@@ -281,6 +291,7 @@ router.put(
             recommendations = $5,
             reported_at = COALESCE($6::timestamptz, reported_at)
           WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
+            AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)
           RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
             submitted_at, id_employee
         )
@@ -314,7 +325,8 @@ router.put(
         const existingReport = await pool.query(
           `SELECT submitted_at
           FROM service_reports
-          WHERE id = $1 AND id_employee = $2`,
+          WHERE id = $1 AND id_employee = $2
+              AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)`,
           [reportId, employeeId],
         );
 
@@ -345,14 +357,15 @@ router.put(
 
 router.post(
   "/employees/:employeeId/service-reports/:reportId/submit",
+  requireSession(pool, ["employee"], true),
   async (request, response) => {
     const { employeeId, reportId } = request.params;
 
-    if (!/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
+    if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
       return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
     }
 
-    if (!/^\d+$/.test(reportId) || /^0+$/.test(reportId)) {
+    if (typeof reportId !== "string" || !/^\d+$/.test(reportId) || /^0+$/.test(reportId)) {
       return response.status(400).json({ message: "ID poročila ni veljaven." });
     }
 
@@ -362,6 +375,7 @@ router.post(
           UPDATE service_reports
           SET submitted_at = NOW()
           WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
+            AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)
           RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
             submitted_at, id_employee
         )
@@ -388,7 +402,8 @@ router.post(
         const existingReport = await pool.query(
           `SELECT submitted_at
           FROM service_reports
-          WHERE id = $1 AND id_employee = $2`,
+          WHERE id = $1 AND id_employee = $2
+              AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)`,
           [reportId, employeeId],
         );
 

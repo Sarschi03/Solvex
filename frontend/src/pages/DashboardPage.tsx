@@ -60,7 +60,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
   const [servicesState, setServicesState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [servicesError, setServicesError] = useState('')
   const [serviceSearch, setServiceSearch] = useState('')
-  const [serviceSortOrder, setServiceSortOrder] = useState<ServiceSortOrder>('newest')
+  const [serviceSortOrder, setServiceSortOrder] = useState<ServiceSortOrder>('urgent-first')
   const [reportSearch, setReportSearch] = useState('')
   const [reportSortOrder, setReportSortOrder] = useState<ReportSortOrder>('newest')
   const [selectedService, setSelectedService] = useState<Service | null>(null)
@@ -90,7 +90,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
       setServicesError('')
 
       try {
-        const response = await fetch(`${apiBase}/services`, {
+        const response = await fetch(`${apiBase}/employees/${encodeURIComponent(employee.id)}/services`, {
           signal: controller.signal,
         })
         const result = (await response.json().catch(() => ({}))) as {

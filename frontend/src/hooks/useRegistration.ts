@@ -1,7 +1,8 @@
 import { useState, type SubmitEvent } from 'react'
 import { apiBase } from '../lib/api'
+import type { AccountRole } from '../types'
 
-export function useRegistration() {
+export function useRegistration(role: AccountRole = 'customer') {
   const [notice, setNotice] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [registered, setRegistered] = useState(false)
@@ -13,19 +14,21 @@ export function useRegistration() {
     setNotice('')
     setIsSubmitting(true)
     try {
-      const response = await fetch(`${apiBase}/customers/register`, {
+      const endpoint = { customer: 'customers', employee: 'employees', manager: 'managers' }[role]
+      const response = await fetch(`${apiBase}/${endpoint}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const result = (await response.json().catch(() => ({}))) as { message?: string; customer?: { id: string } }
-      if (!response.ok || !result.customer?.id) {
+      const result = (await response.json().catch(() => ({}))) as { message?: string; customer?: { id: string }; account?: { id: string } }
+      if (!response.ok || !(result.account?.id || result.customer?.id)) {
         setNotice(result.message ?? 'Registracija ni uspela. Poskusi znova.')
         return
       }
       form.reset()
       setRegistered(true)
-      setNotice('Račun lastnika je ustvarjen. V prijavi izberi Lastnik in se vpiši z novim računom.')
+      const label = { customer: 'Lastnik', employee: 'Zaposleni', manager: 'Vodja servisa' }[role]
+      setNotice(`Račun je ustvarjen. V prijavi izberi ${label} in se vpiši z novim računom.`)
     } catch {
       setNotice('Backend trenutno ni dosegljiv. Poskusi znova.')
     } finally {

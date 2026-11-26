@@ -16,9 +16,10 @@ in dejansko stanje v `docs/07-pregled-projekta.md`. Pri arhitekturnem posegu pre
   slovenska sporočila ter statusi 400/404/409 za ustrezne uporabniške napake.
 - Uporabi skupni `pool` in parametrizirane vrednosti `$1`, `$2`; ne sestavljaj SQL
   iz uporabniškega vnosa. Za dinamično sortiranje uporabi preslikavo dovoljenih polj.
-- ID zaposlenega v URL-ju ni dokaz prijave. Projekt še nima strežniške seje;
-  ne predstavljaj filtriranja po ID kot zagotovljene avtorizacije. Za nov dostop
-  do podatkov določi pravila lastništva in odkrito navedi omejitve obstoječe prijave.
+- ID zaposlenega v URL-ju ni dokaz prijave. Uporabi `requireSession` iz
+  `backend/src/profiles.ts`, dovoljene vloge in pri serviserjevih poteh ujemanje
+  ID-ja s sejo. V poizvedbi preveri trenutno dodelitev servisa in lastništvo poročila.
+  Vodji dovoli le predvideni vpogled; lastnik nima dostopa do internih poročil.
 - Pri poročilih ohrani pravilo: oddanega poročila ni mogoče urejati ali znova oddati.
   Ne vračaj `password_hash` ali povezovalnih podatkov.
 - V `backend/test/api.test.ts` dodaj scenarije za uspeh, neveljaven vnos,

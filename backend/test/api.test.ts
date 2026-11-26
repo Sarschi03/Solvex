@@ -22,11 +22,12 @@ let employeeId: string;
 let serviceId: string;
 let reportId: string;
 let customerId: string;
+let employeeCookie: string;
 
 async function request(path: string, method = 'GET', body?: unknown) {
   const response = await fetch(`${base}/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: employeeCookie },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: response.status, body: await response.json() };
@@ -55,6 +56,9 @@ before(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   base = `http://127.0.0.1:${address.port}`;
+  const login = await accountRequest('/employees/login', undefined, 'POST', { email: 'test@example.com', password: 'TestPassword123!' });
+  assert.equal(login.status, 200);
+  employeeCookie = login.cookie!.split(';')[0];
 });
 
 async function accountRequest(path: string, cookie?: string, method = 'GET', body?: unknown) {
@@ -73,6 +77,136 @@ async function customerSession() {
 }
 
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+
+describe('Tri vrste računov in strežniška pooblastila', () => {
+  const staff = { firstName: 'Nov', lastName: 'Serviser', email: 'worker-register@test.si', password: 'TestPassword123!', phone: '040000000', serviceType: 'electrical' };
+  let managerCookie: string;
+  let managerId: string;
+  let otherEmployeeId: string;
+
+  it('odprto registrira serviserja, hashira geslo in ignorira vlogo iz telesa', async () => {
+    const result = await accountRequest('/employees/register', undefined, 'POST', { ...staff, role: 'manager' });
+    assert.equal(result.status, 201);
+    assert.equal(result.body.account.role, 'employee');
+    assert.equal(result.body.account.password_hash, undefined);
+    otherEmployeeId = result.body.account.id;
+    const saved = await pool.query('SELECT password_hash FROM employees WHERE id=$1', [otherEmployeeId]);
+    assert.ok(await argon2.verify(saved.rows[0].password_hash, staff.password));
+    assert.equal((await accountRequest('/employees/register', undefined, 'POST', staff)).status, 409);
+  });
+
+  it('preveri specializacijo, obvezna polja in dolžino gesla pred registracijo', async () => {
+    for (const body of [{ ...staff, serviceType: 'admin' }, { ...staff, phone: '' }, { ...staff, password: 'short' }, { ...staff, password: 'x'.repeat(129) }]) {
+      assert.equal((await accountRequest('/employees/register', undefined, 'POST', body)).status, 400);
+    }
+    assert.equal((await accountRequest('/managers/register', undefined, 'POST', { ...staff, email: 'invalid' })).status, 400);
+  });
+
+  it('odprto registrira vodjo in prijavi v sejo z vlogo iz baze', async () => {
+    const body = { ...staff, email: 'manager@test.si' };
+    const registered = await accountRequest('/managers/register', undefined, 'POST', body);
+    assert.equal(registered.status, 201);
+    assert.equal(registered.body.account.role, 'manager');
+    assert.equal(registered.body.account.password_hash, undefined);
+    managerId = registered.body.account.id;
+    assert.equal((await accountRequest('/managers/register', undefined, 'POST', body)).status, 409);
+    const login = await accountRequest('/managers/login', undefined, 'POST', { ...body, role: 'customer' });
+    assert.equal(login.status, 200);
+    assert.match(login.cookie!, /HttpOnly/);
+    managerCookie = login.cookie!.split(';')[0];
+    assert.equal((await accountRequest('/auth/me', managerCookie)).body.account.role, 'manager');
+    const session = await pool.query('SELECT manager_id FROM account_sessions WHERE manager_id=$1', [managerId]);
+    assert.equal(session.rowCount, 1);
+  });
+
+  it('zavrne napačno geslo vodje in prijavo z računom druge vrste', async () => {
+    assert.equal((await accountRequest('/managers/login', undefined, 'POST', { email: staff.email, password: staff.password })).status, 401);
+    assert.equal((await accountRequest('/managers/login', undefined, 'POST', { email: 'manager@test.si', password: 'wrong' })).status, 401);
+    assert.equal((await accountRequest('/managers/login', undefined, 'POST', {})).status, 400);
+  });
+
+  it('zavrne anonimni dostop na vseh servisnih in poročevalskih poteh', async () => {
+    for (const [path, method] of [
+      ['/services', 'GET'], [`/employees/${employeeId}/services`, 'GET'],
+      [`/employees/${employeeId}/service-reports`, 'GET'], [`/employees/${employeeId}/service-reports`, 'POST'],
+      [`/employees/${employeeId}/service-reports/1`, 'PUT'], [`/employees/${employeeId}/service-reports/1/submit`, 'POST'],
+      ['/managers/overview', 'GET'], ['/managers/requests', 'GET'], ['/managers/employees', 'GET'], ['/managers/service-reports', 'GET'],
+    ]) assert.equal((await accountRequest(path, undefined, method)).status, 401, `${method} ${path}`);
+    assert.equal((await fetch(`${base}/services`)).status, 401, 'Zaščiten je tudi korenski proxy mount.');
+  });
+
+  it('lastnik ne more dostopati do internih podatkov niti s podano vlogo', async () => {
+    const cookie = await customerSession();
+    for (const path of ['/services?role=manager', `/employees/${employeeId}/services`, `/employees/${employeeId}/service-reports`, '/managers/overview', '/managers/employees']) {
+      assert.equal((await accountRequest(path, cookie)).status, 403, path);
+    }
+    assert.equal((await accountRequest(`/employees/${employeeId}/service-reports`, cookie, 'POST', { role: 'employee' })).status, 403);
+  });
+
+  it('serviser vidi samo dodeljene servise in ne more zamenjati ID-ja', async () => {
+    const own = await accountRequest('/services', employeeCookie);
+    assert.equal(own.status, 200);
+    assert.ok(own.body.services.some((item: { id: string }) => item.id === serviceId));
+    const login = await accountRequest('/employees/login', undefined, 'POST', staff);
+    assert.equal(login.status, 200);
+    const otherCookie = login.cookie!.split(';')[0];
+    assert.deepEqual((await accountRequest('/services', otherCookie)).body.services, []);
+    for (const suffix of ['services', 'service-reports']) assert.equal((await accountRequest(`/employees/${employeeId}/${suffix}`, otherCookie)).status, 403);
+    assert.equal((await accountRequest(`/employees/${otherEmployeeId}/service-reports`, otherCookie, 'POST', { id_service: serviceId, work_summary: 'Neveljavno' })).status, 400);
+    assert.equal((await accountRequest('/managers/overview', otherCookie)).status, 403);
+  });
+
+  it('vodja vidi dejanske zahtevke, obremenitve in vse servise brez gesel', async () => {
+    const plant = (await pool.query('SELECT id_solar_plant FROM services WHERE id=$1', [serviceId])).rows[0].id_solar_plant;
+    await pool.query("INSERT INTO service_requests (id_solar_plant,request_type,description) VALUES ($1,'fault_report','Napaka za pregled vodje')", [plant]);
+    const requests = await accountRequest('/managers/requests', managerCookie);
+    assert.equal(requests.status, 200);
+    assert.ok(requests.body.requests.some((item: { description: string }) => item.description === 'Napaka za pregled vodje'));
+    const employees = await accountRequest('/managers/employees', managerCookie);
+    assert.equal(employees.status, 200);
+    assert.ok(employees.body.employees.every((item: object) => !Object.hasOwn(item, 'password_hash')));
+    assert.ok(employees.body.employees.find((item: { id: string; active_services: number }) => item.id === employeeId && item.active_services >= 1));
+    assert.equal((await accountRequest('/services', managerCookie)).status, 200);
+    assert.equal((await accountRequest('/managers/overview', managerCookie)).body.overview.pending_requests, 1);
+  });
+
+  it('vodja bere le oddana poročila in ne more pisati poročil serviserja', async () => {
+    const created = await accountRequest(`/employees/${employeeId}/service-reports`, employeeCookie, 'POST', { id_service: serviceId, work_summary: 'Za preverjanje pravic vodje' });
+    assert.equal(created.status, 201);
+    const id = created.body.report.id;
+    assert.deepEqual((await accountRequest('/managers/service-reports', managerCookie)).body.reports, []);
+    assert.deepEqual((await accountRequest(`/employees/${employeeId}/service-reports`, managerCookie)).body.reports, []);
+    assert.equal((await accountRequest(`/employees/${employeeId}/service-reports`, managerCookie, 'POST', {})).status, 403);
+    assert.equal((await accountRequest(`/employees/${employeeId}/service-reports/${id}`, managerCookie, 'PUT', { work_summary: 'Sprememba' })).status, 403);
+    assert.equal((await accountRequest(`/employees/${employeeId}/service-reports/${id}/submit`, managerCookie, 'POST')).status, 403);
+    await accountRequest(`/employees/${employeeId}/service-reports/${id}/submit`, employeeCookie, 'POST');
+    assert.equal((await accountRequest('/managers/service-reports', managerCookie)).body.reports[0].id, id);
+    await pool.query('DELETE FROM service_reports WHERE id=$1', [id]);
+  });
+
+  it('ob prerazporeditvi servisa prejšnji serviser ne more urejati ali oddati osnutka', async () => {
+    const created = await accountRequest(`/employees/${employeeId}/service-reports`, employeeCookie, 'POST', { id_service: serviceId, work_summary: 'Osnutek pred prerazporeditvijo' });
+    const id = created.body.report.id;
+    await pool.query('UPDATE services SET id_employee=$1 WHERE id=$2', [otherEmployeeId, serviceId]);
+    assert.deepEqual((await accountRequest(`/employees/${employeeId}/service-reports`, employeeCookie)).body.reports, []);
+    assert.equal((await accountRequest(`/employees/${employeeId}/service-reports/${id}`, employeeCookie, 'PUT', { work_summary: 'Sprememba' })).status, 404);
+    assert.equal((await accountRequest(`/employees/${employeeId}/service-reports/${id}/submit`, employeeCookie, 'POST')).status, 404);
+    await pool.query('DELETE FROM service_reports WHERE id=$1', [id]);
+    await pool.query('UPDATE services SET id_employee=$1 WHERE id=$2', [employeeId, serviceId]);
+  });
+
+  it('vodja ima svoj profil, trajno fotografijo ter preklic seje', async () => {
+    const saved = await accountRequest('/account/photo', managerCookie, 'PUT', { image: pixel });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.account.role, 'manager');
+    assert.equal((await pool.query('SELECT profile_image_data FROM managers WHERE id=$1', [managerId])).rows[0].profile_image_data, pixel);
+    const profile = await accountRequest('/account/profile', managerCookie);
+    assert.deepEqual(profile.body.plants, []);
+    assert.deepEqual(profile.body.services, []);
+    await accountRequest('/auth/logout', managerCookie, 'POST');
+    assert.equal((await accountRequest('/managers/overview', managerCookie)).status, 401);
+  });
+});
 
 describe('Prijavljeni profili in fotografije', () => {
   it('zavrne anonimno branje in spreminjanje profila', async () => {
@@ -212,12 +346,12 @@ describe('API s pravo PostgreSQL bazo', () => {
     assert.equal(result.status, 200);
     assert.equal(result.body.services[0].id, serviceId);
     assert.equal((await request('/employees/0/services')).status, 400);
-    assert.deepEqual((await request('/employees/999999/services')).body.services, []);
+    assert.equal((await request('/employees/999999/services')).status, 403);
   });
 
   it('preveri obvezna polja in dodelitev pred ustvarjanjem poročila', async () => {
     assert.equal((await request(`/employees/${employeeId}/service-reports`, 'POST', { id_service: serviceId })).status, 400);
-    assert.equal((await request('/employees/999999/service-reports', 'POST', { id_service: serviceId, work_summary: 'Delo' })).status, 400);
+    assert.equal((await request('/employees/999999/service-reports', 'POST', { id_service: serviceId, work_summary: 'Delo' })).status, 403);
     assert.equal((await request(`/employees/${employeeId}/service-reports`, 'POST', { id_service: serviceId, work_summary: 'Delo', reported_at: 'invalid' })).status, 400);
   });
 

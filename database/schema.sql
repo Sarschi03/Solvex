@@ -121,3 +121,11 @@ CREATE TABLE IF NOT EXISTS account_sessions (
     CHECK (num_nonnulls(customer_id, employee_id) = 1)
 );
 CREATE INDEX IF NOT EXISTS account_sessions_expiry_idx ON account_sessions(expires_at);
+
+-- migration: 003-manager-accounts-and-access
+ALTER TABLE managers ADD COLUMN IF NOT EXISTS profile_image_data TEXT;
+ALTER TABLE account_sessions ADD COLUMN IF NOT EXISTS manager_id BIGINT REFERENCES managers(id) ON DELETE CASCADE;
+ALTER TABLE account_sessions DROP CONSTRAINT IF EXISTS account_sessions_check;
+ALTER TABLE account_sessions DROP CONSTRAINT IF EXISTS account_sessions_one_account_check;
+ALTER TABLE account_sessions ADD CONSTRAINT account_sessions_one_account_check
+    CHECK (num_nonnulls(customer_id, employee_id, manager_id) = 1);

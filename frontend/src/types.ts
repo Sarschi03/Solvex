@@ -6,13 +6,15 @@ export type Employee = {
   service_type: string
 }
 
+export type AccountRole = 'customer' | 'employee' | 'manager'
+
 export type Account = {
   id: string
   first_name: string
   last_name: string
   email: string
   profile_image_data: string | null
-} & ({ role: 'customer' } | { role: 'employee'; service_type: string })
+} & ({ role: 'customer' } | { role: 'employee'; service_type: string } | { role: 'manager' })
 
 export type ProfilePlant = {
   id: string

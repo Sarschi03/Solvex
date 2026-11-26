@@ -53,7 +53,7 @@ describe('Prijava zaposlenega', () => {
     await login()
     expect(await screen.findByRole('heading', { name: 'Živjo, Test!' })).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledWith('/api/employees/login', expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: employee.email, password: 'TestPassword123!' }) }))
-    expect(fetchMock).toHaveBeenCalledWith('/api/services', expect.anything())
+    expect(fetchMock).toHaveBeenCalledWith('/api/employees/1/services', expect.anything())
   })
 
   it('ne sprejme uspešnega odgovora brez zaposlenega', async () => {
@@ -189,7 +189,7 @@ describe('Registracija lastnika', () => {
       method: 'POST',
       body: JSON.stringify({ firstName: 'Ana', lastName: 'Novak', email: 'ana@test.si', password: 'Password123!', address: 'Test 1', postalCode: '2000', city: 'Maribor' }),
     }))
-    expect((await screen.findByRole('status')).textContent).toContain('Račun lastnika je ustvarjen')
+    expect((await screen.findByRole('status')).textContent).toContain('Račun je ustvarjen')
     expect(screen.queryByRole('button', { name: 'Odjava' })).toBeNull()
   })
 
@@ -203,14 +203,20 @@ describe('Registracija lastnika', () => {
   })
 })
 
-describe('Nadzorna plošča lastnika — oblikovna predloga', () => {
-  it('odpre dokumentirane prazne strani in profil brez klicev zasebnega API-ja', async () => {
-    window.history.replaceState(null, '', '#lastnik')
-    const fetchMock = vi.fn()
+describe('Nadzorna plošča prijavljenega lastnika', () => {
+  const account = { id: '7', first_name: 'Ana', last_name: 'Novak', email: 'ana@test.si', role: 'customer', profile_image_data: null }
+  function restoreOwner() {
+    localStorage.setItem('solvex:session', 'true')
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(Response.json(url.endsWith('/account/profile') ? { account, plants: [], services: [] } : { account })))
     vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+  it('odpre dokumentirane prazne strani in lasten profil po obnovi seje', async () => {
+    window.history.replaceState(null, '', '#lastnik')
+    const fetchMock = restoreOwner()
     render(<App />)
     const user = userEvent.setup()
-    expect(screen.getByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })).toBeTruthy()
     for (const name of ['Moje elektrarne', 'Trenutni servisi', 'Pretekli servisi', 'Koristne informacije']) {
       await user.click(screen.getByRole('button', { name }))
       expect((await screen.findByRole('region', { name })).childElementCount).toBe(0)
@@ -220,13 +226,15 @@ describe('Nadzorna plošča lastnika — oblikovna predloga', () => {
     expect(await screen.findByRole('heading', { name: 'Moj profil' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Odjava' }))
     expect(await screen.findByRole('heading', { name: 'Prijava v račun' })).toBeTruthy()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.anything())
   })
 
   it('povezave in priporočila vodijo na prazne strani, iskanje pa filtrira vsebino', async () => {
     window.history.replaceState(null, '', '#lastnik')
+    restoreOwner()
     render(<App />)
     const user = userEvent.setup()
+    await screen.findByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })
     await user.click(screen.getByRole('link', { name: /Naroči pregled/ }))
     expect((await screen.findByRole('region', { name: 'Naroči pregled' })).childElementCount).toBe(0)
     await user.click(screen.getByRole('button', { name: 'Domov' }))

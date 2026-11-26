@@ -66,8 +66,7 @@ Generirani izhodi, dnevniki, odvisnosti in lokalne skrivnosti niso namenjeni dod
 ### Nadzorna plošča in profil lastnika
 
 Po lokalnem zagonu odprite [nadzorno ploščo lastnika](http://localhost:5173/#lastnik).
-Povezava brez prijave ostaja oblikovna predloga z vzorčno fotografijo in splošnimi
-karticami. Za osebni profil na prijavni strani izberite **Lastnik** in se prijavite.
+Povezava zahteva prijavo. Na prijavni strani izberite **Lastnik** in se prijavite.
 Lokalni demo: `demo-owner@solvex.local` / `SolvexDemo123!`. Za zaposlenega izberite
 **Zaposleni**; njegova prijava še vedno odpre ločen delovni prostor.
 
@@ -82,11 +81,34 @@ Fotografije PNG/JPEG/WebP do 5 MB se v brskalniku izrežejo in zmanjšajo na 256
 API sprejme samo raster do 256 KB. Seja traja sedem dni in uporablja HttpOnly piškotek;
 v bazi se hrani hash žetona. `localStorage` vsebuje le nenevarno oznako za obnovo seje.
 Profil in podatki elektrarn se preverjajo na strežniku po seji, ne po ID-ju v URL-ju.
-Novi profilni API ne odpravlja zgodovinskih omejitev ostalih API-poti prevzetega projekta.
+Vsi obstoječi API-ji servisov in poročil zdaj zahtevajo sejo in preverijo vlogo ter
+dodelitev servisa. Sprememba ID-ja v URL-ju ne omogoči dostopa do drugega serviserja.
 
 Po posodobitvi kode zaženite `npm run db:migrate --prefix backend`; migracija
 `002-user-profiles-and-sessions` doda stolpce za slike in tabelo sej brez ponastavitve
-podatkov. Migracija je lokalno preverjena tudi ob ponovitvi; produkcija v tem koraku ni spreminjana.
+podatkov. Migracija `003-manager-accounts-and-access` razširi seje in fotografije še
+na vodje servisa. Migraciji sta lokalno preverjeni tudi ob ponovitvi; produkcija v tem koraku ni spreminjana.
+
+### Tri vrste računov
+
+Pri prijavi izberite **Lastnik**, **Zaposleni** (serviser) ali **Vodja servisa**.
+Na strani Registracija so trije ločeni obrazci:
+`#registracija/lastnik`, `#registracija/serviser` in `#registracija/vodja`.
+Po izrecni odločitvi za ta šolski projekt je registracija vseh treh vrst javna,
+brez vabil ali potrjevanja. Vloga se določi na strežniku glede na registracijsko pot;
+polje `role` v zahtevi ne spremeni pravic. E-pošta je enolična znotraj vrste računa.
+
+| Račun | Trenutno dostopno |
+| --- | --- |
+| Lastnik | Osebna nadzorna plošča, lasten profil, fotografija, lastne elektrarne in zaključeni servisi v profilu. Ostale pripravljene strani so še prazne. |
+| Serviser | Samo dodeljeni servisi, lastni osnutki in oddana poročila; pisanje/oddaja poročila le za trenutno dodeljen servis; profil in fotografija. |
+| Vodja servisa | Pregled dejanskih števcev, vseh zahtevkov in servisov, serviserjev z obremenitvijo ter oddanih poročil; lasten profil in fotografija. |
+
+Vodja je poslovna vloga, ločena od administratorja iz US-15. Ne ureja poročil
+serviserjev in ne upravlja računov. Koledar in zaloga sta pripravljeni strani;
+dodeljevanje nalog, skupine, urejanje nujnosti in terminov ter poslovna logika
+zaloge še sledijo v ločenih nalogah. Podroben obseg in preverjanje:
+[`docs/specs/002-account-roles-foundation/spec.md`](docs/specs/002-account-roles-foundation/spec.md).
 
 ### Lokalna aplikacija
 

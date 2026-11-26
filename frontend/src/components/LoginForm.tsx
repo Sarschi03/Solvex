@@ -8,6 +8,7 @@ export function LoginForm({ auth }: { auth: AuthState }) {
           <legend className="visually-hidden">Vrsta računa</legend>
           <button type="button" aria-pressed={auth.role === 'customer'} onClick={() => auth.setRole('customer')}>Lastnik</button>
           <button type="button" aria-pressed={auth.role === 'employee'} onClick={() => auth.setRole('employee')}>Zaposleni</button>
+          <button type="button" aria-pressed={auth.role === 'manager'} onClick={() => auth.setRole('manager')}>Vodja servisa</button>
         </fieldset>
         <div className="field">
           <label htmlFor="email">{auth.role === 'customer' ? 'E-poštni naslov' : 'Službeni e-poštni naslov'}</label>

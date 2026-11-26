@@ -3,6 +3,14 @@
 Datum pregleda: 15. 11. 2026. Izvor: [lea250301/Solvex](https://github.com/lea250301/Solvex),
 prevzeti commit `b6e7815`. Fork: [Sarschi03/Solvex](https://github.com/Sarschi03/Solvex).
 
+## Posodobitev po vzpostavitvi treh vlog (26. 11. 2026)
+
+Spodnji pregled ostaja zapis stanja ob prevzemu. Trenutna razvojna veja že uporablja
+strežniške seje za vse obstoječe servise in poročila, tri prijave/registracije ter
+bralni pregled vodje. Stare navedbe o javnem API-ju in odsotnosti lastnikove prijave
+opisujejo prevzeto verzijo. Dejanski novi obseg, pravice in še manjkajoča merila so v
+[`specs/002-account-roles-foundation/spec.md`](specs/002-account-roles-foundation/spec.md).
+
 ## Implementirane funkcionalnosti MVP
 
 Deluje prijava zaposlenega z e-pošto in geslom (Argon2). Serviserjev vmesnik prikazuje

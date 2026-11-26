@@ -17,22 +17,21 @@ try {
     name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   const schemaSql = await readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8');
-  const result = await client.query('SELECT name FROM solvex_migrations WHERE name = $1', ['001-initial-schema']);
-  if (result.rowCount === 0) {
-    await client.query(schemaSql);
-    await client.query('INSERT INTO solvex_migrations (name) VALUES ($1)', ['001-initial-schema']);
-    console.log('Applied 001-initial-schema');
-  } else {
-    console.log('Database schema is up to date');
+  const markers = [...schemaSql.matchAll(/^-- migration: ([a-z0-9-]+)\r?$/gm)];
+  const migrations = [{ name: '001-initial-schema', sql: schemaSql.slice(0, markers[0]?.index ?? schemaSql.length) }];
+  for (let index = 0; index < markers.length; index++) {
+    migrations.push({ name: markers[index][1], sql: schemaSql.slice(markers[index].index, markers[index + 1]?.index ?? schemaSql.length) });
   }
-  const profiles = await client.query('SELECT name FROM solvex_migrations WHERE name = $1', ['002-user-profiles-and-sessions']);
-  if (profiles.rowCount === 0) {
-    const marker = '-- migration: 002-user-profiles-and-sessions';
-    if (!schemaSql.includes(marker)) throw new Error('Missing profile migration in database/schema.sql');
-    await client.query(schemaSql.slice(schemaSql.indexOf(marker) + marker.length));
-    await client.query('INSERT INTO solvex_migrations (name) VALUES ($1)', ['002-user-profiles-and-sessions']);
-    console.log('Applied 002-user-profiles-and-sessions');
+  let applied = 0;
+  for (const migration of migrations) {
+    const existing = await client.query('SELECT name FROM solvex_migrations WHERE name = $1', [migration.name]);
+    if (existing.rowCount) continue;
+    await client.query(migration.sql);
+    await client.query('INSERT INTO solvex_migrations (name) VALUES ($1)', [migration.name]);
+    console.log(`Applied ${migration.name}`);
+    applied++;
   }
+  if (!applied) console.log('Database schema is up to date');
   await client.query('COMMIT');
 } catch (error) {
   await client.query('ROLLBACK');
