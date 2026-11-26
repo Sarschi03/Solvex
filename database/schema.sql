@@ -206,3 +206,39 @@ ALTER TABLE service_reports
     ADD COLUMN fault_cause TEXT,
     ADD COLUMN parts_used JSONB NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(parts_used)='array');
 ALTER TABLE service_requests ADD COLUMN follow_up_required BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- migration: 009-parts-inventory
+CREATE TABLE inventory_parts (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    sku VARCHAR(64) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL CHECK (LENGTH(BTRIM(name))>0),
+    manufacturer VARCHAR(100),
+    quantity_on_hand INTEGER NOT NULL DEFAULT 0 CHECK (quantity_on_hand>=0),
+    low_stock_threshold INTEGER NOT NULL DEFAULT 5 CHECK (low_stock_threshold>=0),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE service_reports ADD COLUMN inventory_posted_at TIMESTAMPTZ;
+CREATE TABLE stock_movements (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    part_id BIGINT NOT NULL REFERENCES inventory_parts(id) ON DELETE RESTRICT,
+    report_id BIGINT REFERENCES service_reports(id) ON DELETE RESTRICT,
+    quantity_delta INTEGER NOT NULL CHECK (quantity_delta<>0),
+    stock_after INTEGER NOT NULL CHECK (stock_after>=0),
+    reason VARCHAR(30) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (report_id,part_id),
+    CHECK ((report_id IS NOT NULL AND reason='report_consumption' AND quantity_delta<0)
+        OR (report_id IS NULL AND reason IN ('initial','restock','adjustment')))
+);
+CREATE TABLE inventory_alerts (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    part_id BIGINT NOT NULL REFERENCES inventory_parts(id) ON DELETE RESTRICT,
+    report_id BIGINT REFERENCES service_reports(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX inventory_alerts_one_open ON inventory_alerts(part_id) WHERE resolved_at IS NULL;
+ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
+    CHECK (kind IN ('scheduled','updated','removed','cancelled','completed','low_stock'));

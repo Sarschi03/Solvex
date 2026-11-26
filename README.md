@@ -232,6 +232,19 @@ npm start
 Celotna aplikacija je nato dostopna na `http://localhost:3000`. Če na teh vratih
 že teče razvojni backend, ga pred produkcijskim zagonom ustavite.
 
+## Deli in zaloga (razvojna veja)
+
+Serviser v poročilu izbere kataloški del in količino. Shranjevanje osnutka ne
+spremeni zaloge; oddaja jo odpiše v isti transakciji kot zaključek servisa.
+Ob pomanjkanju ostane osnutek za popravek ali ponovno oddajo po dopolnitvi.
+Vodja ima stran **Zaloga** s količinami, mejami, iskanjem, filtrom ter dnevnikom
+premikov. Nizka zaloga sproži trajno obvestilo s priporočilom za dopolnitev.
+
+Lokalno po migraciji za demo katalog izvedite `npm run db:seed:inventory --prefix backend`.
+Podrobnosti, vzdrževanje in dokazila: [specifikacija US-10](docs/specs/007-parts-inventory/spec.md).
+Ta veja ima 83 backend in 63 frontend uspešnih testov; prvi serviserjev korak je
+v [PR #3](https://github.com/Sarschi03/Solvex/pull/3). Zaloga je pripravljena lokalno.
+
 ## Agentno programiranje
 
 Uporabljamo **Codex CLI**. Po namestitvi CLI-ja in prijavi ga zaženemo iz korena

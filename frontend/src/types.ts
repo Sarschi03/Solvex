@@ -74,7 +74,7 @@ export type ServiceReport = {
   employee_first_name: string
   employee_last_name: string
 }
-export type ReportPart = { name: string; manufacturer: string | null; quantity: number; replaced: boolean; installed_on: string | null }
+export type ReportPart = { inventory_part_id?: string | null; name: string; manufacturer: string | null; quantity: number; replaced: boolean; installed_on: string | null }
 
 export type DashboardPage = 'services' | 'reports' | 'profile' | 'calendar'
 export type CustomerPage = 'overview' | 'plants' | 'current-services' | 'history' | 'information' | 'recommendations' | 'profile' | 'inspection' | 'fault'

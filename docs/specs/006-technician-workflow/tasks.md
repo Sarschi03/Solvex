@@ -13,4 +13,5 @@
 - [x] Browser: manager → dvočlanska dodelitev → koledar → serviser → poročilo z delom
       → oddaja → vodjev prikaz → lastnikov zaključen zahtevek in obvestilo.
 - [x] Končni lint/testi/build obeh delov: 69 backend, 59 frontend.
-- [ ] Push, PR/merge in produkcijska namestitev ostajajo uporabniku.
+- [x] Po dodatnem naročilu objavljena veja in [PR #3](https://github.com/Sarschi03/Solvex/pull/3).
+- [ ] Merge in produkcijska namestitev nista izvedena.

@@ -7,6 +7,7 @@ import type { Account } from '../types'
 import ProfilePage from './ProfilePage'
 import SchedulingPage from './SchedulingPage'
 import CalendarPage from './CalendarPage'
+import InventoryPage from './InventoryPage'
 import { ReportSummary } from '../components/ReportSummary'
 import './DashboardPage.css'
 import './ManagerDashboardPage.css'
@@ -38,7 +39,7 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
       <button className="sidebar-logout" type="button" aria-label="Odjava" title="Odjava" onClick={onLogout}><DashboardIcon name="logout" /></button>
     </aside>
     <DashboardHeader isProfile={view === 'profile'} onProfile={() => navigate('profile')} profileImage={account.profile_image_data} searchValue={search} searchLabel="Išči po pregledu vodje" onSearch={setSearch} />
-    {view === 'profile' ? <ProfilePage account={account} onAccountChange={onAccountChange} /> : view === 'planning' ? <SchedulingPage requestId={planningRequestId} /> : view === 'calendar' ? <CalendarPage /> : <section className="dashboard-content manager-content">
+    {view === 'profile' ? <ProfilePage account={account} onAccountChange={onAccountChange} /> : view === 'planning' ? <SchedulingPage requestId={planningRequestId} /> : view === 'calendar' ? <CalendarPage /> : view === 'inventory' ? <InventoryPage /> : <section className="dashboard-content manager-content">
       <h1>{view === 'overview' ? `Dober dan, ${account.first_name}.` : navigation.find(([id]) => id === view)?.[1]}</h1>
       {view === 'overview' && <p>Pregled servisne ekipe in dela.</p>}
       {loading && <p role="status">Nalaganje podatkov ...</p>}
@@ -53,7 +54,6 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
         {view === 'employees' && data.employees?.filter(item => matches([item.first_name, item.last_name, item.email])).map(item => <article key={item.id}><h2>{item.first_name} {item.last_name}</h2><p>{label(item.service_type)} · {item.email}</p><p>Aktivni servisi: {item.active_services}</p></article>)}
         {view === 'reports' && data.reports?.filter(item => matches([item.solar_plant_name, item.employee_first_name, item.employee_last_name, item.work_summary])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.employee_first_name} {item.employee_last_name} · {label(item.service_type)}</p><h3>Opravljeno delo</h3><p>{item.work_summary}</p>{item.findings && <><h3>Ugotovitve</h3><p>{item.findings}</p></>}{item.recommendations && <><h3>Priporočila</h3><p>{item.recommendations}</p></>}<ReportSummary report={item}/></article>)}
       </div>
-      {view === 'inventory' && <p>Ta funkcionalnost še ni implementirana.</p>}
     </section>}
   </main>
 }

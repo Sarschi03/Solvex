@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { requireSession, sessionAccount } from "./profiles.js";
 import { assignedTo, leaderOf, positiveId, scheduleColumns } from "./assignmentAccess.js";
 import { notify } from "./scheduling.js";
+import { consumeInventory, prepareInventoryParts, InventoryError } from "./inventory.js";
 
 const structured = 'sr.performed_at,sr.plant_condition,sr.outcome,sr.fault_found,sr.fault_cause,sr.parts_used';
 const reportColumns = `sr.id,sr.id_service,sr.work_summary,sr.findings,sr.recommendations,sr.reported_at,sr.submitted_at,${structured},s.service_type,sp.name AS solar_plant_name,e.first_name AS employee_first_name,e.last_name AS employee_last_name`;
@@ -33,14 +34,16 @@ function reportData(body: Record<string,unknown>, old: Record<string,unknown> = 
   const parts=data.parts_used.map(value=>{
     if(!value||typeof value!=='object'||Array.isArray(value)) return fail('Postavka dela ni veljavna.');
     const part=value as Record<string,unknown>;
-    if(Object.keys(part).some(key=>!['name','manufacturer','quantity','replaced','installed_on'].includes(key))) return fail('Postavka dela vsebuje neznana polja.');
-    const name=optionalText(part.name,100),manufacturer=optionalText(part.manufacturer,100);
+    if(Object.keys(part).some(key=>!['inventory_part_id','name','manufacturer','quantity','replaced','installed_on'].includes(key))) return fail('Postavka dela vsebuje neznana polja.');
+    const inventoryId=part.inventory_part_id ?? null;
+    if(inventoryId!==null&&!positiveId(inventoryId)) return fail('Izberi veljaven del iz kataloga.');
+    const name=optionalText(part.name,100) ?? (inventoryId?'Kataloški del':null),manufacturer=optionalText(part.manufacturer,100);
     if(!name||typeof part.quantity!=='number'||!Number.isInteger(part.quantity)||part.quantity<1||part.quantity>10000) return fail('Del potrebuje naziv in pozitivno celo količino do 10000.');
     const replaced=part.replaced ?? true;
     if(typeof replaced!=='boolean') return fail('Menjava dela mora biti true ali false.');
     const installed=part.installed_on ?? (replaced&&typeof performed==='string'?performed.slice(0,10):null);
     if(installed!==null&&(typeof installed!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(installed)||installed.startsWith('0000')||!Number.isFinite(Date.parse(`${installed}T00:00:00Z`))||new Date(`${installed}T00:00:00Z`).toISOString().slice(0,10)!==installed||installed>new Date().toISOString().slice(0,10))) return fail('Datum namestitve dela ni veljaven.');
-    return {name,manufacturer,quantity:part.quantity,replaced,installed_on:installed};
+    return {inventory_part_id:inventoryId,name,manufacturer,quantity:part.quantity,replaced,installed_on:installed};
   });
   return {work_summary:summary,findings:optionalText(data.findings),recommendations:optionalText(data.recommendations),reported_at:reportedDate.toISOString(),performed_at:performed as string|null,plant_condition:data.plant_condition,outcome:data.outcome,fault_found:data.fault_found,fault_cause:optionalText(data.fault_cause,2000),parts_used:parts};
 }
@@ -90,12 +93,15 @@ export function installTechnicianRoutes(router: Router,pool: Pool) {
       if(submitting&&(!data.performed_at||!data.plant_condition||!data.outcome||typeof data.fault_found!=='boolean'||(data.fault_found&&!data.fault_cause))) fail('Pred oddajo dopolni čas izvedbe, stanje elektrarne, rezultat in podatke o napaki.');
       let id=old?.id;
       if(!submitting) {
+        data.parts_used=await prepareInventoryParts(client,data.parts_used);
         const values=[data.work_summary,data.findings,data.recommendations,data.reported_at,data.performed_at,data.plant_condition,data.outcome,data.fault_found,data.fault_cause,JSON.stringify(data.parts_used)];
         if(editing) await client.query(`UPDATE service_reports SET work_summary=$2,findings=$3,recommendations=$4,reported_at=$5,performed_at=$6,plant_condition=$7,outcome=$8,fault_found=$9,fault_cause=$10,parts_used=$11 WHERE id=$1`,[id,...values]);
         else id=(await client.query(`INSERT INTO service_reports (id_service,id_employee,work_summary,findings,recommendations,reported_at,performed_at,plant_condition,outcome,fault_found,fault_cause,parts_used) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,[hint,employee,...values])).rows[0].id;
         await client.query("UPDATE services SET status='in_progress' WHERE id=$1",[hint]);
       } else {
-        await client.query('UPDATE service_reports SET submitted_at=NOW() WHERE id=$1',[id]);
+        if(old.inventory_posted_at) throw new InventoryError('Zaloga za to poročilo je že knjižena.');
+        await consumeInventory(client,id,service.id,data.parts_used);
+        await client.query('UPDATE service_reports SET submitted_at=NOW(),inventory_posted_at=NOW() WHERE id=$1',[id]);
         await client.query("UPDATE services SET status='completed',completed_at=NOW() WHERE id=$1",[hint]);
         if(service.id_service_request) {
           if(data.outcome==='follow_up') await client.query('UPDATE service_requests SET follow_up_required=true WHERE id=$1',[service.id_service_request]);
@@ -103,7 +109,8 @@ export function installTechnicianRoutes(router: Router,pool: Pool) {
         }
         const owner=(await client.query('SELECT id_customer FROM solar_plants WHERE id_solar_plants=$1',[service.id_solar_plant])).rows[0].id_customer;
         await notify(client,'customer_id',owner,service.id,'completed',`Servis #${service.id} je opravljen.${data.outcome==='follow_up'?' Potreben je nadaljnji poseg.':''}`);
-        if(service.id_manager) await notify(client,'manager_id',service.id_manager,service.id,'completed',`Oddano je poročilo za servis #${service.id}.${data.outcome==='follow_up'?' Potreben je nadaljnji poseg.':''}`);
+        const consumption = data.parts_used.length ? ` Porabljeni deli: ${data.parts_used.map(part=>`${part.name} × ${part.quantity}`).join(', ')}.` : ' Rezervni deli niso bili porabljeni.';
+        if(service.id_manager) await notify(client,'manager_id',service.id_manager,service.id,'completed',`Oddano je poročilo za servis #${service.id}.${consumption}${data.outcome==='follow_up'?' Potreben je nadaljnji poseg.':''}`);
       }
       const result=await client.query(`SELECT ${reportColumns} ${reportJoin} WHERE sr.id=$1`,[id]);
       await client.query('COMMIT');
@@ -111,6 +118,7 @@ export function installTechnicianRoutes(router: Router,pool: Pool) {
     } catch(error) {
       await client.query('ROLLBACK');
       if(error instanceof InvalidReport) return response.status(400).json({message:error.message});
+      if(error instanceof InventoryError) return response.status(error.status).json({message:error.message});
       console.error('Report workflow failed:',error);return response.status(500).json({message:'Poročila ni bilo mogoče obdelati.'});
     } finally {client.release();}
   }
