@@ -6,6 +6,9 @@ import { DashboardHeader } from '../components/DashboardHeader'
 import { DashboardSidebar } from '../components/DashboardSidebar'
 import ProfilePage from './ProfilePage'
 import CalendarPage from './CalendarPage'
+import { ReportStructuredFields } from '../components/ReportStructuredFields'
+import { ReportSummary } from '../components/ReportSummary'
+import { TechnicianServiceDetails } from '../components/TechnicianServiceDetails'
 import './DashboardPage.css'
 
 type DashboardPageProps = { employee: Employee; account: Account | null; onAccountChange: (account: Account) => void; onLogout: () => void }
@@ -76,6 +79,8 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
   const [reportFormNotice, setReportFormNotice] = useState('')
   const [isSubmittingReport, setIsSubmittingReport] = useState(false)
   const [reportActionNotice, setReportActionNotice] = useState('')
+  const [reportSuccess,setReportSuccess] = useState('')
+  const [showCompleted,setShowCompleted] = useState(false)
   const [submittingReportId, setSubmittingReportId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -157,7 +162,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
           throw new Error('Backend je vrnil neveljaven seznam servisov.')
         }
 
-        setAssignedServices(result.services)
+        setAssignedServices(result.services.filter(service=>service.can_report!==false&&!['completed','cancelled'].includes(service.status)))
         setAssignedServicesState('loaded')
       } catch (error) {
         if (controller.signal.aborted) {
@@ -245,6 +250,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
 
   async function handleReportSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (isSubmittingReport) return
     setReportFormNotice('')
 
     if (!employee) {
@@ -273,6 +279,12 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
             findings: formData.get('findings'),
             recommendations: formData.get('recommendations'),
             reported_at: reportedAt ? new Date(reportedAt).toISOString() : null,
+            performed_at: formData.get('performed_at') ? new Date(String(formData.get('performed_at'))).toISOString() : null,
+            plant_condition: formData.get('plant_condition') || null,
+            outcome: formData.get('outcome') || null,
+            fault_found: formData.get('fault_found') === 'yes' ? true : formData.get('fault_found') === 'no' ? false : null,
+            fault_cause: formData.get('fault_cause') || null,
+            parts_used: JSON.parse(String(formData.get('parts_used') || '[]')),
           }),
         },
       )
@@ -290,6 +302,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
       }
 
       const savedReport = result.report
+      setReportSuccess('Poročilo je uspešno shranjeno kot osnutek.')
       setReports((currentReports) =>
         editingReport
           ? currentReports
@@ -344,6 +357,9 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
       }
 
       const submittedReport = result.report
+      setReportSuccess('Poročilo je oddano in zaklenjeno. Servis je zaključen.')
+      setAssignedServices(current=>current.filter(service=>service.id!==submittedReport.id_service))
+      setServices(current=>current.map(service=>service.id===submittedReport.id_service?{...service,status:'completed',completed_at:new Date().toISOString()}:service))
       setReports((currentReports) =>
         currentReports.map((item) =>
           item.id === submittedReport.id ? submittedReport : item,
@@ -367,6 +383,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
 
   const normalizedServiceSearch = serviceSearch.trim().toLocaleLowerCase('sl-SI')
   const matchingServices = services.filter((service) => {
+    if (!showCompleted && ['completed','cancelled'].includes(service.status)) return false
     if (!normalizedServiceSearch) {
       return true
     }
@@ -472,6 +489,8 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
             </div>
           )}
           <div className="dashboard-placeholder">
+            {reportSuccess && <p role="status">{reportSuccess}</p>}
+            {dashboardPage==='services'&&<label><input type="checkbox" checked={showCompleted} onChange={event=>setShowCompleted(event.target.checked)} /> Prikaži zaključene / preklicane</label>}
             {dashboardPage === 'services' ? (
               <>
                 <div className="service-toolbar">
@@ -580,7 +599,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
                     ))}
                   </ul>
                   ) : (
-                    <p className="services-message">Za iskanje »{serviceSearch}« ni servisov.</p>
+                    <p className="services-message">{normalizedServiceSearch?`Za iskanje »${serviceSearch}« ni servisov.`:'Ni aktivnih servisov. Za zgodovino vključi zaključene / preklicane.'}</p>
                   )
                 )}
               </>
@@ -751,6 +770,8 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
                     <dt>Termin</dt>
                     <dd>{formatDate(selectedService.scheduled_at)}</dd>
                   </div>
+                  <div><dt>Dodeljeno</dt><dd>{formatDate(selectedService.assigned_at ?? null)}</dd></div>
+                  <div><dt>Konec termina / rok</dt><dd>{formatDate(selectedService.scheduled_end_at ?? null)}</dd></div>
                   <div>
                     <dt>Zaposleni</dt>
                     <dd>
@@ -772,6 +793,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
                     </div>
                   )}
                 </dl>
+                <TechnicianServiceDetails employeeId={employee.id} serviceId={selectedService.id} />
               </section>
             </div>
           )}
@@ -841,6 +863,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
                     </div>
                   )}
                 </dl>
+                <ReportSummary report={selectedReport}/>
               </section>
             </div>
           )}
@@ -922,7 +945,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
                       )}
                       {assignedServicesState === 'loaded' && assignedServices.length === 0 && (
                         <span className="field-hint">
-                          Poročilo lahko ustvariš, ko ti bo dodeljen servis.
+                          Poročilo lahko ustvari vodja ekipe za aktiven dodeljen servis.
                         </span>
                       )}
                     </div>
@@ -936,6 +959,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
                         required
                       />
                     </div>
+                    <ReportStructuredFields report={editingReport}/>
                     <div className="field report-form-wide">
                       <label htmlFor="report-findings">Ugotovitve</label>
                       <textarea

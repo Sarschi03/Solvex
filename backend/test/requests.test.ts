@@ -198,3 +198,155 @@ describe('US-08: inbox in nujnost', () => {
     } finally { await pool.query('ALTER TABLE services DROP CONSTRAINT test_request_rollback'); }
   });
 });
+
+describe('US-09/11/12: ekipe, razpored, koledar in obvestila', () => {
+  let cleanerId: string;
+  let cleanerCookie: string;
+  let day = 1;
+  before(async () => {
+    const created = await call('/employees/register', undefined, 'POST', { firstName:'Tina',lastName:'Čistilka',email:'cleaner-schedule@test.si',password:'ScheduleTest123!',phone:'000',serviceType:'cleaning' });
+    cleanerId = created.body.account.id;
+    cleanerCookie = (await call('/auth/login',undefined,'POST',{identifier:'cleaner-schedule@test.si',password:'ScheduleTest123!'})).cookie!;
+  });
+  async function data() {
+    const request = (await fault()).body.request;
+    const start = new Date(Date.UTC(2090,0,day++,9));
+    return { request_id:request.id,service_type:'electrical',leader_id:workerId,scheduled_at:start.toISOString(),scheduled_end_at:new Date(start.getTime()+3600000).toISOString(), assignments:[{employee_id:workerId,responsibility:'electrical'},{employee_id:cleanerId,responsibility:'cleaning'}] };
+  }
+  it('dodeli več članov, vodjo, odgovornosti in termin ter prikaže vsem članom', async () => {
+    const body = await data();
+    const result = await call('/managers/services',managerCookie,'POST',body);
+    assert.equal(result.status,201);
+    assert.equal(result.body.service.assignments.length,2);
+    assert.equal(result.body.service.assignments.filter((item:{is_leader:boolean})=>item.is_leader).length,1);
+    const id = result.body.service.id;
+    for (const [employee,cookie] of [[workerId,workerCookie],[cleanerId,cleanerCookie]]) {
+      const list = await call(`/employees/${employee}/services`,cookie);
+      assert.ok(list.body.services.some((item:{id:string})=>item.id===id));
+    }
+    const workload = await call('/managers/employees',managerCookie);
+    assert.ok(workload.body.employees.find((item:{id:string;active_services:number})=>item.id===cleanerId && item.active_services>=1));
+    assert.equal((await call(`/requests/${body.request_id}`,ownerCookie)).body.request.status,'scheduled');
+  });
+  it('preveri razpoložljivost in zavrne prekrivanje, dovoljuje sosednja termina',async()=>{
+    const body=await data();
+    assert.equal((await call('/managers/services',managerCookie,'POST',body)).status,201);
+    const availability=await call(`/managers/availability?${new URLSearchParams({start:body.scheduled_at,end:body.scheduled_end_at})}`,managerCookie);
+    assert.equal(availability.status,200);
+    assert.equal(availability.body.employees.find((item:{id:string})=>item.id===cleanerId).available,false);
+    const another=await data();
+    assert.equal((await call('/managers/services',managerCookie,'POST',{...another,scheduled_at:body.scheduled_at,scheduled_end_at:body.scheduled_end_at})).status,409);
+    assert.equal((await call('/managers/services',managerCookie,'POST',{...another,scheduled_at:body.scheduled_end_at,scheduled_end_at:new Date(Date.parse(body.scheduled_end_at)+3600000).toISOString()})).status,201);
+  });
+  it('sočasni dodelitvi iste ekipe v istem terminu ne ustvarita dvojne rezervacije',async()=>{
+    const first=await data(),second=await data();
+    const results=await Promise.all([call('/managers/services',managerCookie,'POST',first),call('/managers/services',managerCookie,'POST',{...second,scheduled_at:first.scheduled_at,scheduled_end_at:first.scheduled_end_at})]);
+    assert.deepEqual(results.map(item=>item.status).sort(),[201,409]);
+  });
+  it('spreminjanje ekipe prekliče dostop odstranjenemu članu in pošlje obvestila',async()=>{
+    const body=await data();
+    const id=(await call('/managers/services',managerCookie,'POST',body)).body.service.id;
+    const result=await call(`/managers/services/${id}/schedule`,managerCookie,'PUT',{...body,assignments:[body.assignments[0]]});
+    assert.equal(result.status,200);
+    assert.ok(!(await call(`/employees/${cleanerId}/services`,cleanerCookie)).body.services.some((item:{id:string})=>item.id===id));
+    const notifications=await call('/notifications',cleanerCookie);
+    const removed=notifications.body.notifications.find((item:{service_id:string;kind:string})=>item.service_id===id&&item.kind==='removed');
+    assert.ok(removed);
+    assert.equal((await call(`/notifications/${removed.id}/read`,workerCookie,'PATCH')).status,404);
+    assert.equal((await call(`/notifications/${removed.id}/read`,cleanerCookie,'PATCH')).status,200);
+    assert.ok((await call('/notifications',ownerCookie)).body.notifications.some((item:{service_id:string})=>item.service_id===id));
+  });
+  it('lastnik in član vidita svoj koledar, drug lastnik ne; preklic ohrani zgodovino',async()=>{
+    const body=await data();
+    const id=(await call('/managers/services',managerCookie,'POST',body)).body.service.id;
+    const path=`/calendar?${new URLSearchParams({from:body.scheduled_at,to:body.scheduled_end_at})}`;
+    for(const cookie of [ownerCookie,workerCookie,cleanerCookie,managerCookie]) assert.ok((await call(path,cookie)).body.services.some((item:{id:string})=>item.id===id));
+    assert.deepEqual((await call(path,otherCookie)).body.services,[]);
+    assert.equal((await call(`/managers/services/${id}/cancel`,managerCookie,'POST')).status,200);
+    assert.ok(!(await call(path,ownerCookie)).body.services.some((item:{id:string})=>item.id===id));
+    assert.equal((await pool.query('SELECT status FROM services WHERE id=$1',[id])).rows[0].status,'cancelled');
+    assert.equal((await call(`/requests/${body.request_id}`,ownerCookie)).body.request.status,'reviewing');
+  });
+  it('zavrne napačne vloge, vodjo izven ekipe, specializacije in neveljavne termine',async()=>{
+    const body=await data();
+    assert.equal((await call('/managers/services',undefined,'POST',body)).status,401);
+    for(const cookie of [ownerCookie,workerCookie]) assert.equal((await call('/managers/services',cookie,'POST',body)).status,403);
+    for(const extra of [{leader_id:'999999'},{assignments:[]},{assignments:[body.assignments[0],body.assignments[0]]},{scheduled_end_at:body.scheduled_at},{scheduled_at:'2090-02-31T09:00:00Z',scheduled_end_at:'2090-03-04T10:00:00Z'}]) assert.equal((await call('/managers/services',managerCookie,'POST',{...body,...extra})).status,400);
+    assert.equal((await call('/managers/services',managerCookie,'POST',{...body,assignments:[{employee_id:workerId,responsibility:'cleaning'}]})).status,400);
+  });
+});
+
+describe('US-05/06/07: podrobnosti, strukturirana poročila in zaključek',()=>{
+  let followerId:string;
+  let followerCookie:string;
+  let day=1;
+  const complete={work_summary:'Pregled in popravilo',performed_at:'2020-01-01T10:00:00Z',plant_condition:'operational',outcome:'resolved',fault_found:true,fault_cause:'Slab kontakt',parts_used:[{name:'Varovalka',manufacturer:'Testni proizvajalec',quantity:2,replaced:true,installed_on:'2020-01-01'}]};
+  before(async()=>{
+    const account=await call('/employees/register',undefined,'POST',{firstName:'Član',lastName:'Ekipe',email:'report-member@test.si',password:'ReportTest123!',phone:'000',serviceType:'electrical'});
+    followerId=account.body.account.id;
+    followerCookie=(await call('/auth/login',undefined,'POST',{identifier:'report-member@test.si',password:'ReportTest123!'})).cookie!;
+  });
+  async function service(){
+    const request=(await fault()).body.request;
+    const start=new Date(Date.UTC(2095,0,day++,9));
+    const saved=await call('/managers/services',managerCookie,'POST',{request_id:request.id,service_type:'electrical',leader_id:workerId,scheduled_at:start.toISOString(),scheduled_end_at:new Date(start.getTime()+3600000).toISOString(),assignments:[{employee_id:workerId,responsibility:'electrical'},{employee_id:followerId,responsibility:'electrical'}]});
+    assert.equal(saved.status,201);return {id:saved.body.service.id,requestId:request.id};
+  }
+  it('vsi trenutni člani berejo elektrarno, le vodja lahko napiše poročilo',async()=>{
+    const saved=await service();
+    const details=await call(`/employees/${followerId}/services/${saved.id}`,followerCookie);
+    assert.equal(details.status,200);assert.equal(details.body.plant.name,'Anina elektrarna');assert.equal(details.body.service.assignments.length,2);assert.equal(details.body.service.can_report,false);
+    assert.equal((await call(`/employees/${followerId}/service-reports`,followerCookie,'POST',{id_service:saved.id,...complete})).status,400);
+    assert.equal((await call(`/employees/${workerId}/services/${saved.id}`,ownerCookie)).status,403);
+    assert.equal((await call(`/employees/${workerId}/services/${saved.id}`,followerCookie)).status,403);
+    const other=(await pool.query("INSERT INTO services (id_solar_plant,service_type,id_employee) VALUES ($1,'electrical',$2) RETURNING id",[otherPlantId,followerId])).rows[0].id;
+    assert.equal((await call(`/employees/${workerId}/services/${other}`,workerCookie)).status,404);
+  });
+  it('osnutek je popravljiv, oddaja zahteva vse strukturirane podatke',async()=>{
+    const saved=await service();
+    const created=await call(`/employees/${workerId}/service-reports`,workerCookie,'POST',{id_service:saved.id,work_summary:'Osnutek'});
+    assert.equal(created.status,201);const id=created.body.report.id;
+    assert.equal((await call(`/employees/${workerId}/service-reports/${id}/submit`,workerCookie,'POST')).status,400);
+    const updated=await call(`/employees/${workerId}/service-reports/${id}`,workerCookie,'PUT',complete);
+    assert.equal(updated.status,200);assert.equal(updated.body.report.parts_used[0].quantity,2);
+    assert.equal((await pool.query('SELECT status FROM services WHERE id=$1',[saved.id])).rows[0].status,'in_progress');
+  });
+  it('oddaja enkrat zaklene poročilo, zaključi servis/zahtevek in obvesti lastnika/vodjo',async()=>{
+    const saved=await service();
+    const id=(await call(`/employees/${workerId}/service-reports`,workerCookie,'POST',{id_service:saved.id,...complete})).body.report.id;
+    const results=await Promise.all([call(`/employees/${workerId}/service-reports/${id}/submit`,workerCookie,'POST'),call(`/employees/${workerId}/service-reports/${id}/submit`,workerCookie,'POST')]);
+    assert.deepEqual(results.map(item=>item.status).sort(),[200,409]);
+    assert.equal((await call(`/employees/${workerId}/service-reports/${id}`,workerCookie,'PUT',{work_summary:'Sprememba'})).status,409);
+    assert.equal((await pool.query('SELECT status FROM services WHERE id=$1',[saved.id])).rows[0].status,'completed');
+    assert.equal((await call(`/requests/${saved.requestId}`,ownerCookie)).body.request.status,'completed');
+    assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM notifications WHERE service_id=$1 AND customer_id IS NOT NULL AND kind='completed'",[saved.id])).rows[0].count,1);
+    assert.ok((await call('/notifications',managerCookie)).body.notifications.some((item:{service_id:string})=>item.service_id===saved.id));
+    const report=(await call('/managers/service-reports',managerCookie)).body.reports.find((item:{id:string})=>item.id===id);
+    assert.equal(report.fault_cause,'Slab kontakt');assert.equal(report.parts_used[0].name,'Varovalka');
+    const customer=JSON.stringify((await call('/requests',ownerCookie)).body);assert.ok(!customer.includes('Slab kontakt'));
+  });
+  it('nedokončana težava vrne zahtevek v pregled, nova dodelitev omogoči nadaljevanje',async()=>{
+    const saved=await service();
+    const id=(await call(`/employees/${workerId}/service-reports`,workerCookie,'POST',{id_service:saved.id,...complete,outcome:'follow_up',plant_condition:'limited'})).body.report.id;
+    assert.equal((await call(`/employees/${workerId}/service-reports/${id}/submit`,workerCookie,'POST')).status,200);
+    const request=(await call(`/requests/${saved.requestId}`,ownerCookie)).body.request;
+    assert.equal(request.status,'reviewing');assert.equal(request.follow_up_required,true);
+    const start=new Date(Date.UTC(2095,6,day++,9));
+    const next=await call('/managers/services',managerCookie,'POST',{request_id:saved.requestId,service_type:'electrical',leader_id:workerId,scheduled_at:start.toISOString(),scheduled_end_at:new Date(start.getTime()+3600000).toISOString(),assignments:[{employee_id:workerId,responsibility:'electrical'}]});
+    assert.equal(next.status,201);assert.equal((await call(`/requests/${saved.requestId}`,ownerCookie)).body.request.follow_up_required,false);
+  });
+  it('vrne največ pet zadnjih opravljenih servisov iste elektrarne, vključno z deli',async()=>{
+    const saved=await service();
+    for(let index=0;index<7;index++) {
+      const id=(await pool.query("INSERT INTO services (id_solar_plant,service_type,status,completed_at) VALUES ($1,'electrical','completed',$2) RETURNING id",[plantId,new Date(Date.UTC(2098,0,index+1)).toISOString()])).rows[0].id;
+      await pool.query("INSERT INTO service_reports (id_service,id_employee,work_summary,submitted_at,parts_used,outcome) VALUES ($1,$2,$3,NOW(),$4,'resolved')",[id,workerId,`Zgodovina ${index}`,JSON.stringify(complete.parts_used)]);
+    }
+    const detail=await call(`/employees/${workerId}/services/${saved.id}`,workerCookie);
+    assert.equal(detail.body.recent_history.length,5);assert.equal(detail.body.recent_history[0].work_summary,'Zgodovina 6');assert.equal(detail.body.recent_history[0].parts_used[0].manufacturer,'Testni proizvajalec');
+  });
+  it('zavrne neveljavne strukturirane podatke in ne shrani napačnega osnutka',async()=>{
+    const saved=await service();
+    for(const extra of [{parts_used:[{name:'Del',quantity:0}]},{parts_used:[{name:'',quantity:1}]},{fault_found:'yes'},{outcome:['resolved']},{plant_condition:'unknown'},{performed_at:'2099-01-01T10:00:00Z'},{performed_at:'2020-02-31T10:00:00Z'},{parts_used:[{name:'Del',quantity:1,installed_on:'2020-02-31'}]}]) assert.equal((await call(`/employees/${workerId}/service-reports`,workerCookie,'POST',{id_service:saved.id,...complete,...extra})).status,400);
+    assert.equal((await pool.query('SELECT COUNT(*)::int AS count FROM service_reports WHERE id_service=$1',[saved.id])).rows[0].count,0);
+  });
+});

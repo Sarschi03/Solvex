@@ -77,7 +77,7 @@ describe('Prijava zaposlenega', () => {
     await user.click(screen.getByRole('button', { name: 'Servisi' }))
     expect(await screen.findByRole('heading', { name: 'Živjo, Test!' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Koledar' }))
-    expect(screen.getByRole('region', { name: 'Koledar' }).childElementCount).toBe(0)
+    expect(screen.getByRole('heading', { name: 'Koledar terminov' })).toBeTruthy()
     const logout = screen.getByRole('button', { name: 'Odjava' })
     expect(logout.textContent?.trim()).toBe('')
     await user.click(logout)

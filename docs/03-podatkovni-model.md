@@ -111,6 +111,17 @@ brez internih servisnih zapisnikov.
 
 ## Dopolnitev: oddaja in ocena zahtevkov
 
+Migracija 007 uvede `service_assignments` kot M:N povezavo med servisom in člani,
+z odgovornostjo, vodjo in časom dodelitve. `services.id_employee` ostane združljiva
+referenca na vodjo. `scheduled_end_at` določa konec termina/rok, `notifications`
+pa hrani lastna trajna obvestila strank, serviserjev in vodij.
+
+Migracija 008 razširi poročilo s časom izvedbe, stanjem elektrarne, rezultatom,
+ugotovljeno napako/vzrokom in JSONB postavkami delov (količina, proizvajalec,
+menjava, znan datum namestitve). `service_requests.follow_up_required` označi
+nedokončano težavo. Oddaja in zaključek se izvajata v transakciji. Stari neznani
+podatki ostanejo null, brez izmišljevanja zgodovine ali delov.
+
 Migracija `006-customer-requests` v `service_requests` doda `fault_type VARCHAR(100)`,
 `requested_services TEXT[]`, `urgency` (`standardno`, `resno`, `nujno`) ter
 `reviewed_by` (FK na vodjo) in `reviewed_at`. Obstoječi zapisi ostanejo; pri že

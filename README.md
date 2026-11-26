@@ -124,6 +124,13 @@ Pravila, primeri in dokazila: [specifikacija zahtevkov](docs/specs/004-customer-
 
 ### Tri vrste računov
 
+Za US-09/11/12 ima vodja dodatno stran **Razporeditev** za veččlansko ekipo,
+vodjo, odgovornosti in termin z začetkom/koncem. Razpoložljivost in obremenitev se
+preverjata na strežniku, prekrivanja so zavrnjena tudi ob sočasnih zapisih.
+**Koledar** prikazuje termine glede na vlogo; zvonček odpira lastna trajna obvestila
+o dodelitvah, spremembah in preklicih. Po prevzemu zaženite lokalno migracijo 007.
+Podrobnosti: [dodeljevanje in termini](docs/specs/005-assignment-scheduling/spec.md).
+
 Pri prijavi ni izbire vloge. Skupni `POST /api/auth/login` sprejme `{ identifier, password }`
 in vrne račun z vlogo, določeno ob registraciji. `identifier` je e-pošta ali dodeljeno
 uporabniško ime; spremenjena vloga v zahtevi ne vpliva na prijavo.
@@ -155,10 +162,29 @@ gesla se shranijo kot Argon2 hash. Ti testni računi niso bili ustvarjeni v prod
 | Vodja servisa | Pregled dejanskih števcev, ločen inbox okvar/pregledov z določanjem nujnosti, vsi servisi, serviserji z obremenitvijo, oddana poročila, lasten profil in fotografija. |
 
 Vodja je poslovna vloga, ločena od administratorja iz US-15. Ne ureja poročil
-serviserjev in ne upravlja računov. Koledar in zaloga sta pripravljeni strani;
-dodeljevanje nalog, skupine, urejanje terminov ter poslovna logika
-zaloge še sledijo v ločenih nalogah. Podroben obseg in preverjanje:
+serviserjev in ne upravlja računov. Zaloga ostaja pripravljena stran;
+dodeljevanje nalog, skupine in koledar so zdaj povezani. Poslovna logika
+zaloge ostaja ločena naloga. Podroben začetni obseg in preverjanje:
 [`docs/specs/002-account-roles-foundation/spec.md`](docs/specs/002-account-roles-foundation/spec.md).
+
+### Serviserjev delovni tok – US-05, US-06 in US-07
+
+Serviser vidi samo trenutne dodelitve, privzeto aktivne naloge po nujnosti, in lahko
+naloge pripne. V podrobnostih so čas dodelitve, rok/konec termina, celotna ekipa,
+podatki elektrarne, opis okvare in zadnjih pet opravljenih servisov z ugotovitvami,
+rezultatom ter znanimi menjavami delov. Ti podatki so samo za branje.
+
+Poročilo piše in odda samo trenutni vodja ekipe. Osnutek se shrani s povzetkom;
+pred oddajo so obvezni čas izvedbe, stanje elektrarne, rezultat in podatek o napaki
+(z vzrokom, če je bila ugotovljena). Deli so strukturirane postavke z nazivom,
+proizvajalcem, količino in podatki o menjavi/namestitvi. Oddaja v eni transakciji
+zaklene poročilo, zaključi servis, posodobi zahtevek in obvesti lastnika ter vodjo.
+Če je potreben nadaljnji poseg, zahtevek ostane v pregledu za novo dodelitev.
+
+Lokalno zaženite `npm run db:migrate --prefix backend` (migraciji 007 in 008).
+Veji sta ločeni: `feat/assignment-scheduling` vsebuje prvi korak, odvisna
+`feat/technician-workflow` pa dodaja poročila in zaključevanje. Opis in dokazila:
+[specifikacija delovnega toka](docs/specs/006-technician-workflow/spec.md).
 
 ### Lokalna aplikacija
 

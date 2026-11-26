@@ -3,7 +3,7 @@ import { apiBase } from '../lib/api'
 import type { Service, ServiceReport } from '../types'
 import type { CustomerRequest } from '../lib/requestFlow'
 
-export type ManagerView = 'overview' | 'requests' | 'services' | 'employees' | 'reports' | 'calendar' | 'inventory' | 'profile'
+export type ManagerView = 'overview' | 'requests' | 'services' | 'employees' | 'reports' | 'calendar' | 'inventory' | 'profile' | 'planning'
 export type ManagerRequest = CustomerRequest & {
   customer_first_name: string; customer_last_name: string; customer_email: string; customer_phone: string | null
   installed_capacity_kw: string | null; manufacturer: string | null; installation_year: number | null
