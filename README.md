@@ -23,7 +23,7 @@ GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](d
 
 - `lint`: ESLint preveri frontend in backend; napake ustavijo cevovod.
 - `build`: TypeScript/Vite zgradita oba dela; `application-build` vsebuje prevedeno aplikacijo in podatke za zagon. Odvisnosti se predpomnijo z npm cache.
-- `test`: 11 API testov s PostgreSQL in 16 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
+- `test`: 11 API testov s PostgreSQL in 7 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
 - `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakte in objavi že prevedeni backend na Render ter frontend na Vercel. Render namesti samo izvajalne odvisnosti, Vercel uporabi `--prebuilt`; aplikaciji se ne gradita ponovno.
 
 **Javna aplikacija: [solvex-henna.vercel.app](https://solvex-henna.vercel.app)**
@@ -41,38 +41,6 @@ Za oddajo na Moodle je pripravljena [oddaja.txt](oddaja.txt) z obema povezavama.
 Frontend bo objavljen na **Vercel Hobby**, backend na **Render Free**, baza pa bo **Free PostgreSQL**. Brezplačna Render baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve so v [docs/08-ci-cd.md](docs/08-ci-cd.md), prva objava frontenda pa v [docs/10-vercel-frontend.md](docs/10-vercel-frontend.md).
 
 ## Zagon
-
-### Kaj pomenijo mape in nastavitve
-
-| Pot | Namen |
-| --- | --- |
-| `frontend/src/`, `backend/src/` | Izvorna koda aplikacije; strani, komponente, hooki in API. |
-| `frontend/src/App.test.tsx`, `backend/test/` | Avtomatizirani testi; potrebni tudi za CI. |
-| `coverage/` v frontendu/backendu | Generirana HTML/LCOV poročila o pokritosti testov. Varno jih izbrišemo; `npm run test:coverage` jih ustvari znova. |
-| `dist/` v frontendu/backendu | Generirana produkcijska gradnja; `npm run build` jo ustvari znova. Za `npm start` backenda mora gradnja že obstajati. |
-| `node_modules/` | Nameščene odvisnosti. Potrebne za lokalni razvoj; po brisanju je potreben `npm ci`. |
-| `.playwright-mcp/` | Lokalni posnetki in dnevniki preverjanja brskalnika; po potrebi jih lahko izbrišemo. |
-| `.vercel/project.json` | Povezava lokalne mape s projektom Vercel; `.vercel/output/` je generiran namestitveni paket. |
-| `package.json`, `package-lock.json` | Ukazi in odvisnosti ter ponovljiva namestitev njihovih različic. |
-| `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`, `eslint.config.js` | Nastavitve TypeScripta, razvoja/gradnje, testov in linta. |
-| `database/`, `docs/`, `oddaja.txt` | Podatkovni model, podedovani SQL primeri, projektna dokumentacija in šolska oddaja. |
-| `.github/`, `.codex/`, `.agents/`, `.mcp.json`, `AGENTS.md` | CI/CD ter zahtevana navodila, varovalke, skilli in MCP za agenta. |
-
-Generirani izhodi, dnevniki, odvisnosti in lokalne skrivnosti niso namenjeni dodajanju v Git.
-
-### Oblikovna predloga nadzorne plošče lastnika
-
-Po lokalnem zagonu odprite [nadzorno ploščo lastnika](http://localhost:5173/#lastnik).
-To je predloga vmesnika z vzorčno fotografijo in splošnimi karticami; ne nalaga
-zasebnih podatkov in ne nadomešča še neizdelane prijave lastnika.
-Obstoječa prijava zaposlenega še vedno odpre njegov delovni prostor.
-
-Na podlagi `docs/06-wireframes.md` so pripravljene prazne strani za elektrarne,
-trenutne servise, pretekle servise, koristne informacije in profil (prek avatarja).
-Prazne strani za redni pregled, prijavo okvare in priporočila so povezane z
-nadzorne plošče. Serviser ima dodatno prazen koledar.
-
-### Lokalna aplikacija
 
 Potrebujete Node.js 24, npm in zagnan Docker Desktop. Iz korenske mape:
 
@@ -148,19 +116,25 @@ Codexa; agentu ne odpirajte dostopa do `.env`.
   postopek dodajanja ali spreminjanja Express API-ja.
 - [.agents/skills/solvex-tests/SKILL.md](.agents/skills/solvex-tests/SKILL.md):
   API testi s PostgreSQL in testi React vmesnika.
+- [.agents/skills/solvex-frontend/SKILL.md](.agents/skills/solvex-frontend/SKILL.md):
+  spremembe React/TypeScript vmesnika in povezava z API-jem.
+- [.agents/skills/solvex-user-story/SKILL.md](.agents/skills/solvex-user-story/SKILL.md):
+  izvedba dokumentirane uporabniške zgodbe skozi celoten sklad.
+- [.agents/skills/solvex-refactor/SKILL.md](.agents/skills/solvex-refactor/SKILL.md):
+  preureditev kode z ohranitvijo opaznega vedenja.
 - `docs/05-uporabniske-zgodbe.md`, `docs/adr/` in `docs/07-pregled-projekta.md`:
   zahteve, arhitekturne odločitve in dejansko stanje aplikacije.
-- `docs/specs/001-funkcionalnost/`: predloge `spec.md`, `plan.md`, `tasks.md`;
-  do izbire funkcionalnosti so prazne.
+- `docs/specs/001-funkcionalnost/`: specifikacija, načrt in opravila za osebni profil;
+  aplikacijska izvedba je pripravljena v ločenem PR z veje `frontend`.
 - [docs/12-agentno-programiranje.md](docs/12-agentno-programiranje.md):
   preverjanje MCP in predlog naslednje funkcionalnosti.
 
 ### Playwright MCP in skilli
 
-Frontend je razdeljen v `src/pages/` (prijava in dashboard), `src/components/`
-(obrazec, slikovni grid, navigacija) in `src/hooks/` (prijava in pripenjanje).
-Skupni tipi so v `src/types.ts`, API URL v `src/lib/api.ts`. Vsa aplikacijska
-logika frontenda je React/TypeScript (`.tsx` in `.ts`); CSS ureja videz.
+Ta PR vsebuje agentsko pripravo in ohranja aplikacijsko kodo veje `main`.
+Ločeni PR `frontend` vsebuje prenovo vmesnika, razdelitev na strani, komponente
+in hooke ter osebne profile. Rezultati preverjanj so zato v dokumentu 12 ločeni
+po obeh vejah.
 
 Playwright MCP `@playwright/mcp@0.0.86` omogoča preverjanje lokalnega React vmesnika
 in njegove povezave z Express API-jem. Potrebuje nameščen Google Chrome; ob prvem
@@ -171,6 +145,7 @@ zahtev, ne varnostna izolacija pred preusmeritvami. Izhodi `.playwright-mcp/` ni
 
 Po zagonu aplikacije lahko agentu naročite: »S Playwright MCP preveri lokalno
 prijavo in nalaganje servisov.« Uspešen dejanski preizkus je opisan v dokumentu 12.
-Za skilla uporabite `$solvex-api-endpoint` oziroma `$solvex-tests` v navodilu agentu;
+Za skille uporabite `$solvex-api-endpoint`, `$solvex-tests`, `$solvex-frontend`,
+`$solvex-user-story` ali `$solvex-refactor` v navodilu agentu;
 Codex ju lahko glede na opis izbere tudi sam. Pred predajo spremembe vedno izvede
 lint in teste obeh delov po `AGENTS.md`.

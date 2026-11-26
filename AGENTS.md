@@ -45,11 +45,7 @@ in `npm run test:coverage --prefix backend`.
 
 ## Struktura projekta
 
-- `frontend/src/pages/`: prijava, registracija, dashboard, profil in koledar.
-- `frontend/src/pages/customer/`: predloga lastnika (`#lastnik`) in prazne dokumentirane strani.
-- `frontend/src/components/`: obrazci, grid, ikonska navigacija in glava z iskanjem.
-- `frontend/src/hooks/`: prijava in pripeti servisi; `types.ts` in `lib/`: tipi in API URL.
-- `frontend/src/`: React/TypeScript in CSS; testi `*.test.tsx` ob kodi oziroma `App.test.tsx`.
+- `frontend/src/`: React/TypeScript vmesnik in CSS; testi `*.test.tsx` ob kodi.
 - `frontend/public/`: javne statične datoteke; `frontend/scripts/`: priprava Vercel paketa.
 - `backend/src/app.ts`: Express API in povezava z bazo; `server.ts`: zagon strežnika.
 - `backend/test/`: integracijski API testi `*.test.ts`; `backend/scripts/`: migracija in zagon.
@@ -57,6 +53,8 @@ in `npm run test:coverage --prefix backend`.
 - `docs/`: projektna dokumentacija; `docs/adr/`: arhitekturne odločitve.
 - `docs/wireframes/`: gradivo vmesnika; `docs/specs/001-funkcionalnost/`: `spec.md`, `plan.md`, `tasks.md`.
 - `.agents/skills/`: lokalni skilli za Codex, vsak v svoji mapi s `SKILL.md`.
+- `solvex-frontend`: UI; `solvex-user-story`: uporabniške zgodbe; `solvex-refactor`: refaktoriranje.
+- `solvex-api-endpoint`: Express API; `solvex-tests`: testi React/API; skill preberi pred uporabo.
 - `solvex-api-endpoint`: Express API; `solvex-tests`: API/React testi v `.agents/skills/`.
 - Playwright MCP je v `.codex/config.toml`; `.mcp.json` je združljiv izvoz zagona.
 - `.github/workflows/ci-cd.yml`: CI/CD; `render.yaml` in `vercel.json`: namestitev.
