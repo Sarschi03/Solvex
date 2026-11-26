@@ -9,7 +9,8 @@ export default defineConfig({
     restoreMocks: true,
     coverage: {
       provider: 'v8',
-      include: ['src/App.tsx'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.tsx', 'src/main.tsx', 'src/types.ts'],
       reporter: ['text', 'lcov', 'html'],
     },
   },

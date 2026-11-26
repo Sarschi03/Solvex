@@ -81,3 +81,17 @@ SONCNA_ELEKTRARNA ||--o{ SERVIS : "ima"
 SERVISER ||--o{ SERVIS : "izvaja"
 ```
 
+# Dopolnitev: profili in seje
+
+Migracija `002-user-profiles-and-sessions` v `database/schema.sql` doda:
+
+- `customers.profile_image_data` in `employees.profile_image_data`: neobvezna
+  raster profilna slika kot podatkovni URL; API omeji format in velikost na 256 KB.
+- `account_sessions`: SHA-256 hash naključnega žetona, datum izteka in referenca na
+  točno enega lastnika ali zaposlenega. Ne hrani izvornega žetona ali gesel.
+
+Prikaz hiše uporablja obstoječa polja `solar_plants.panel_count`,
+`installed_capacity_kw` in naslov. Slika je shematska; ni podatkov o geometriji strehe.
+Zgodovina v profilu uporablja samo zaključene servise lastnikovih elektrarn,
+brez internih servisnih zapisnikov.
+

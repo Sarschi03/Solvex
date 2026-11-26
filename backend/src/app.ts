@@ -3,6 +3,7 @@ import "dotenv/config";
 import { Pool } from "pg";
 import argon2 from "argon2";
 import path from "node:path";
+import { installProfileRoutes, startSession } from "./profiles.js";
 
 const app = express();
 const router = express.Router();
@@ -15,7 +16,8 @@ export const pool = new Pool({
   password: process.env.DB_PASSWORD,
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "400kb" }));
+installProfileRoutes(router, pool);
 
 router.get("/services", async (_request, response) => {
   try {
@@ -435,7 +437,7 @@ router.post("/employees/login", async (request, response) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, first_name, last_name, email, password_hash, service_type
+      `SELECT id, first_name, last_name, email, password_hash, service_type, profile_image_data
       FROM employees
       WHERE email = $1`,
       [email],
@@ -448,6 +450,7 @@ router.post("/employees/login", async (request, response) => {
           email: string;
           password_hash: string;
           service_type: string;
+          profile_image_data: string | null;
         }
       | undefined;
 
@@ -457,8 +460,10 @@ router.post("/employees/login", async (request, response) => {
       });
     }
 
+    await startSession(request, response, pool, "employee", employee.id);
     return response.status(200).json({
       message: "Prijava je uspela.",
+      account: { id: employee.id, first_name: employee.first_name, last_name: employee.last_name, email: employee.email, service_type: employee.service_type, profile_image_data: employee.profile_image_data, role: "employee" },
       employee: {
         id: employee.id,
         first_name: employee.first_name,

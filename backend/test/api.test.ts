@@ -21,6 +21,7 @@ let base: string;
 let employeeId: string;
 let serviceId: string;
 let reportId: string;
+let customerId: string;
 
 async function request(path: string, method = 'GET', body?: unknown) {
   const response = await fetch(`${base}/api${path}`, {
@@ -42,6 +43,7 @@ before(async () => {
   const customer = await pool.query(`INSERT INTO customers
     (first_name,last_name,email,password_hash,address,postal_code,city)
     VALUES ('Test','Lastnik','owner@example.com',$1,'Test 1','2000','Maribor') RETURNING id`, [hash]);
+  customerId = customer.rows[0].id;
   const plant = await pool.query(`INSERT INTO solar_plants
     (id_customer,name,installation_address,postal_code,city)
     VALUES ($1,'Test elektrarna','Test 1','2000','Maribor') RETURNING id_solar_plants`, [customer.rows[0].id]);
@@ -53,6 +55,114 @@ before(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   base = `http://127.0.0.1:${address.port}`;
+});
+
+async function accountRequest(path: string, cookie?: string, method = 'GET', body?: unknown) {
+  const response = await fetch(`${base}/api${path}`, {
+    method, headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: response.status, body: await response.json(), cookie: response.headers.get('set-cookie') };
+}
+
+async function customerSession() {
+  const result = await accountRequest('/customers/login', undefined, 'POST', { email: 'owner@example.com', password: 'TestPassword123!' });
+  assert.equal(result.status, 200);
+  assert.ok(result.cookie);
+  return result.cookie.split(';')[0];
+}
+
+const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+
+describe('Prijavljeni profili in fotografije', () => {
+  it('zavrne anonimno branje in spreminjanje profila', async () => {
+    assert.equal((await accountRequest('/auth/me')).status, 401);
+    assert.equal((await accountRequest('/account/profile')).status, 401);
+    assert.equal((await accountRequest('/account/photo', undefined, 'PUT', { image: pixel })).status, 401);
+  });
+
+  it('zavrne napačno geslo in neveljavne podatke lastnika', async () => {
+    assert.equal((await accountRequest('/customers/login', undefined, 'POST', { email: 'invalid', password: 'x' })).status, 400);
+    const result = await accountRequest('/customers/login', undefined, 'POST', { email: 'owner@example.com', password: 'wrong' });
+    assert.equal(result.status, 401);
+    assert.equal(result.cookie, null);
+  });
+
+  it('ustvari HttpOnly sejo in shrani samo hash žetona', async () => {
+    const result = await accountRequest('/customers/login', undefined, 'POST', { email: ' OWNER@example.com ', password: 'TestPassword123!' });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.account.role, 'customer');
+    assert.equal(result.body.account.password_hash, undefined);
+    assert.match(result.cookie!, /HttpOnly/i);
+    assert.match(result.cookie!, /SameSite=Lax/i);
+    const cookie = result.cookie!.split(';')[0];
+    const token = cookie.split('=')[1];
+    const hashes = await pool.query('SELECT token_hash FROM account_sessions');
+    assert.ok(hashes.rows.every(row => row.token_hash !== token));
+    assert.equal((await accountRequest('/auth/me', cookie)).body.account.id, customerId);
+  });
+
+  it('shrani fotografijo samo lastniku seje in jo vrne po ponovni prijavi', async () => {
+    const cookie = await customerSession();
+    const result = await accountRequest('/account/photo', cookie, 'PUT', { image: pixel, id: employeeId });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.account.profile_image_data, pixel);
+    assert.equal((await pool.query('SELECT profile_image_data FROM customers WHERE id=$1', [customerId])).rows[0].profile_image_data, pixel);
+    assert.equal((await pool.query('SELECT profile_image_data FROM employees WHERE id=$1', [employeeId])).rows[0].profile_image_data, null);
+    const nextCookie = await customerSession();
+    assert.equal((await accountRequest('/account/profile', nextCookie)).body.account.profile_image_data, pixel);
+    await accountRequest('/account/photo', cookie, 'PUT', { image: null });
+  });
+
+  it('zavrne SVG, neujemajoč format in preveliko fotografijo', async () => {
+    const cookie = await customerSession();
+    for (const image of ['data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,YWJj', `data:image/png;base64,${'A'.repeat(350004)}`]) {
+      assert.equal((await accountRequest('/account/photo', cookie, 'PUT', { image })).status, 400);
+    }
+  });
+
+  it('omogoči odstranitev fotografije', async () => {
+    const cookie = await customerSession();
+    await accountRequest('/account/photo', cookie, 'PUT', { image: pixel });
+    assert.equal((await accountRequest('/account/photo', cookie, 'PUT', { image: null })).body.account.profile_image_data, null);
+    assert.equal((await pool.query('SELECT profile_image_data FROM customers WHERE id=$1', [customerId])).rows[0].profile_image_data, null);
+  });
+
+  it('vrne samo lastnikove elektrarne in zaključene servise, brez zapisnikov', async () => {
+    const cookie = await customerSession();
+    const plant = await pool.query("INSERT INTO solar_plants (id_customer,name,installation_address,postal_code,city,panel_count) VALUES ($1,'Profil test','Test 2','2000','Maribor',12) RETURNING id_solar_plants", [customerId]);
+    const plantId = plant.rows[0].id_solar_plants;
+    const completed = await pool.query("INSERT INTO services (id_solar_plant,service_type,status,completed_at) VALUES ($1,'cleaning','completed',NOW()) RETURNING id", [plantId]);
+    const planned = await pool.query("INSERT INTO services (id_solar_plant,service_type) VALUES ($1,'electrical') RETURNING id", [plantId]);
+    const other = await pool.query("INSERT INTO customers (first_name,last_name,email,password_hash,address,postal_code,city) VALUES ('Drug','Lastnik','other-profile@test.si','unused','Test 3','2000','Maribor') RETURNING id");
+    await pool.query("INSERT INTO solar_plants (id_customer,name,installation_address,postal_code,city) VALUES ($1,'Skrita elektrarna','Test 3','2000','Maribor')", [other.rows[0].id]);
+    const result = await accountRequest('/account/profile?customerId=' + other.rows[0].id, cookie);
+    assert.equal(result.status, 200);
+    assert.ok(result.body.plants.some((item: { id: string }) => item.id === plantId));
+    assert.ok(!result.body.plants.some((item: { name: string }) => item.name === 'Skrita elektrarna'));
+    assert.ok(result.body.services.some((item: { id: string }) => item.id === completed.rows[0].id));
+    assert.ok(!result.body.services.some((item: { id: string }) => item.id === planned.rows[0].id));
+    assert.ok(result.body.services.every((item: object) => !Object.hasOwn(item, 'work_summary')));
+  });
+
+  it('zaposleni lahko shrani svojo sliko in nima elektrarn lastnika', async () => {
+    const login = await accountRequest('/employees/login', undefined, 'POST', { email: 'test@example.com', password: 'TestPassword123!' });
+    const cookie = login.cookie!.split(';')[0];
+    assert.equal((await accountRequest('/account/photo', cookie, 'PUT', { image: pixel })).body.account.role, 'employee');
+    const profile = await accountRequest('/account/profile', cookie);
+    assert.deepEqual(profile.body.plants, []);
+    assert.deepEqual(profile.body.services, []);
+    await accountRequest('/account/photo', cookie, 'PUT', { image: null });
+  });
+
+  it('odjava prekliče sejo in potečena seja ni veljavna', async () => {
+    const cookie = await customerSession();
+    assert.equal((await accountRequest('/auth/logout', cookie, 'POST')).status, 200);
+    assert.equal((await accountRequest('/auth/me', cookie)).status, 401);
+    const expiredCookie = await customerSession();
+    await pool.query("UPDATE account_sessions SET expires_at = NOW() - INTERVAL '1 second' WHERE customer_id=$1", [customerId]);
+    assert.equal((await accountRequest('/account/profile', expiredCookie)).status, 401);
+  });
 });
 
 after(async () => {
