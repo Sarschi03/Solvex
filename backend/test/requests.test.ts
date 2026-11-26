@@ -198,3 +198,80 @@ describe('US-08: inbox in nujnost', () => {
     } finally { await pool.query('ALTER TABLE services DROP CONSTRAINT test_request_rollback'); }
   });
 });
+
+describe('US-09/11/12: ekipe, razpored, koledar in obvestila', () => {
+  let cleanerId: string;
+  let cleanerCookie: string;
+  let day = 1;
+  before(async () => {
+    const created = await call('/employees/register', undefined, 'POST', { firstName:'Tina',lastName:'Čistilka',email:'cleaner-schedule@test.si',password:'ScheduleTest123!',phone:'000',serviceType:'cleaning' });
+    cleanerId = created.body.account.id;
+    cleanerCookie = (await call('/auth/login',undefined,'POST',{identifier:'cleaner-schedule@test.si',password:'ScheduleTest123!'})).cookie!;
+  });
+  async function data() {
+    const request = (await fault()).body.request;
+    const start = new Date(Date.UTC(2090,0,day++,9));
+    return { request_id:request.id,service_type:'electrical',leader_id:workerId,scheduled_at:start.toISOString(),scheduled_end_at:new Date(start.getTime()+3600000).toISOString(), assignments:[{employee_id:workerId,responsibility:'electrical'},{employee_id:cleanerId,responsibility:'cleaning'}] };
+  }
+  it('dodeli več članov, vodjo, odgovornosti in termin ter prikaže vsem članom', async () => {
+    const body = await data();
+    const result = await call('/managers/services',managerCookie,'POST',body);
+    assert.equal(result.status,201);
+    assert.equal(result.body.service.assignments.length,2);
+    assert.equal(result.body.service.assignments.filter((item:{is_leader:boolean})=>item.is_leader).length,1);
+    const id = result.body.service.id;
+    for (const [employee,cookie] of [[workerId,workerCookie],[cleanerId,cleanerCookie]]) {
+      const list = await call(`/employees/${employee}/services`,cookie);
+      assert.ok(list.body.services.some((item:{id:string})=>item.id===id));
+    }
+    const workload = await call('/managers/employees',managerCookie);
+    assert.ok(workload.body.employees.find((item:{id:string;active_services:number})=>item.id===cleanerId && item.active_services>=1));
+    assert.equal((await call(`/requests/${body.request_id}`,ownerCookie)).body.request.status,'scheduled');
+  });
+  it('preveri razpoložljivost in zavrne prekrivanje, dovoljuje sosednja termina',async()=>{
+    const body=await data();
+    assert.equal((await call('/managers/services',managerCookie,'POST',body)).status,201);
+    const availability=await call(`/managers/availability?${new URLSearchParams({start:body.scheduled_at,end:body.scheduled_end_at})}`,managerCookie);
+    assert.equal(availability.status,200);
+    assert.equal(availability.body.employees.find((item:{id:string})=>item.id===cleanerId).available,false);
+    const another=await data();
+    assert.equal((await call('/managers/services',managerCookie,'POST',{...another,scheduled_at:body.scheduled_at,scheduled_end_at:body.scheduled_end_at})).status,409);
+    assert.equal((await call('/managers/services',managerCookie,'POST',{...another,scheduled_at:body.scheduled_end_at,scheduled_end_at:new Date(Date.parse(body.scheduled_end_at)+3600000).toISOString()})).status,201);
+  });
+  it('sočasni dodelitvi iste ekipe v istem terminu ne ustvarita dvojne rezervacije',async()=>{
+    const first=await data(),second=await data();
+    const results=await Promise.all([call('/managers/services',managerCookie,'POST',first),call('/managers/services',managerCookie,'POST',{...second,scheduled_at:first.scheduled_at,scheduled_end_at:first.scheduled_end_at})]);
+    assert.deepEqual(results.map(item=>item.status).sort(),[201,409]);
+  });
+  it('spreminjanje ekipe prekliče dostop odstranjenemu članu in pošlje obvestila',async()=>{
+    const body=await data();
+    const id=(await call('/managers/services',managerCookie,'POST',body)).body.service.id;
+    const result=await call(`/managers/services/${id}/schedule`,managerCookie,'PUT',{...body,assignments:[body.assignments[0]]});
+    assert.equal(result.status,200);
+    assert.ok(!(await call(`/employees/${cleanerId}/services`,cleanerCookie)).body.services.some((item:{id:string})=>item.id===id));
+    const notifications=await call('/notifications',cleanerCookie);
+    const removed=notifications.body.notifications.find((item:{service_id:string;kind:string})=>item.service_id===id&&item.kind==='removed');
+    assert.ok(removed);
+    assert.equal((await call(`/notifications/${removed.id}/read`,workerCookie,'PATCH')).status,404);
+    assert.equal((await call(`/notifications/${removed.id}/read`,cleanerCookie,'PATCH')).status,200);
+    assert.ok((await call('/notifications',ownerCookie)).body.notifications.some((item:{service_id:string})=>item.service_id===id));
+  });
+  it('lastnik in član vidita svoj koledar, drug lastnik ne; preklic ohrani zgodovino',async()=>{
+    const body=await data();
+    const id=(await call('/managers/services',managerCookie,'POST',body)).body.service.id;
+    const path=`/calendar?${new URLSearchParams({from:body.scheduled_at,to:body.scheduled_end_at})}`;
+    for(const cookie of [ownerCookie,workerCookie,cleanerCookie,managerCookie]) assert.ok((await call(path,cookie)).body.services.some((item:{id:string})=>item.id===id));
+    assert.deepEqual((await call(path,otherCookie)).body.services,[]);
+    assert.equal((await call(`/managers/services/${id}/cancel`,managerCookie,'POST')).status,200);
+    assert.ok(!(await call(path,ownerCookie)).body.services.some((item:{id:string})=>item.id===id));
+    assert.equal((await pool.query('SELECT status FROM services WHERE id=$1',[id])).rows[0].status,'cancelled');
+    assert.equal((await call(`/requests/${body.request_id}`,ownerCookie)).body.request.status,'reviewing');
+  });
+  it('zavrne napačne vloge, vodjo izven ekipe, specializacije in neveljavne termine',async()=>{
+    const body=await data();
+    assert.equal((await call('/managers/services',undefined,'POST',body)).status,401);
+    for(const cookie of [ownerCookie,workerCookie]) assert.equal((await call('/managers/services',cookie,'POST',body)).status,403);
+    for(const extra of [{leader_id:'999999'},{assignments:[]},{assignments:[body.assignments[0],body.assignments[0]]},{scheduled_end_at:body.scheduled_at},{scheduled_at:'2090-02-31T09:00:00Z',scheduled_end_at:'2090-03-04T10:00:00Z'}]) assert.equal((await call('/managers/services',managerCookie,'POST',{...body,...extra})).status,400);
+    assert.equal((await call('/managers/services',managerCookie,'POST',{...body,assignments:[{employee_id:workerId,responsibility:'cleaning'}]})).status,400);
+  });
+});

@@ -9,6 +9,8 @@ import { installManagerRoutes } from "./managerRoutes.js";
 import { installPlantRoutes } from "./plants.js";
 import { installLoginRoute } from "./login.js";
 import { installRequestRoutes } from "./requests.js";
+import { installSchedulingRoutes } from "./scheduling.js";
+import { assignedTo } from "./assignmentAccess.js";
 
 const app = express();
 const router = express.Router();
@@ -35,6 +37,7 @@ installManagerRoutes(router, pool);
 installPlantRoutes(router, pool);
 installLoginRoute(router, pool);
 installRequestRoutes(router, pool);
+installSchedulingRoutes(router, pool);
 
 router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
   const account = sessionAccount(response);
@@ -46,6 +49,9 @@ router.get("/services", requireSession(pool, ["employee", "manager"]), async (_r
         s.urgency,
         s.status,
         s.scheduled_at,
+        s.scheduled_end_at,
+        (SELECT assigned_at FROM service_assignments sa WHERE sa.service_id=s.id AND sa.employee_id=$1) AS assigned_at,
+        s.id_employee=$1 AS can_report,
         s.completed_at,
         s.notes,
         sp.name AS solar_plant_name,
@@ -60,7 +66,7 @@ router.get("/services", requireSession(pool, ["employee", "manager"]), async (_r
       JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
       JOIN customers c ON c.id = sp.id_customer
       LEFT JOIN employees e ON e.id = s.id_employee
-      WHERE ($1::bigint IS NULL OR s.id_employee = $1)
+      WHERE ($1::bigint IS NULL OR ${assignedTo("$1")})
       ORDER BY CASE s.urgency WHEN 'nujno' THEN 0 WHEN 'resno' THEN 1 ELSE 2 END, s.scheduled_at NULLS LAST, s.id DESC`,
       [account.role === "employee" ? account.id : null],
     );
@@ -90,6 +96,9 @@ router.get("/employees/:employeeId/services", requireSession(pool, ["employee", 
         s.urgency,
         s.status,
         s.scheduled_at,
+        s.scheduled_end_at,
+        (SELECT assigned_at FROM service_assignments sa WHERE sa.service_id=s.id AND sa.employee_id=$1) AS assigned_at,
+        s.id_employee=$1 AS can_report,
         s.completed_at,
         s.notes,
         sp.name AS solar_plant_name,
@@ -104,8 +113,8 @@ router.get("/employees/:employeeId/services", requireSession(pool, ["employee", 
       JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
       JOIN customers c ON c.id = sp.id_customer
       LEFT JOIN employees e ON e.id = s.id_employee
-      WHERE s.id_employee = $1
-      ORDER BY s.scheduled_at NULLS LAST, s.id DESC`,
+      WHERE ${assignedTo("$1")}
+      ORDER BY CASE s.urgency WHEN 'nujno' THEN 0 WHEN 'resno' THEN 1 ELSE 2 END,s.scheduled_at NULLS LAST,s.id DESC`,
       [employeeId],
     );
 

@@ -166,3 +166,33 @@ UPDATE service_requests r SET urgency = COALESCE((
     SELECT s.urgency FROM services s WHERE s.id_service_request=r.id
     ORDER BY CASE s.urgency WHEN 'nujno' THEN 0 WHEN 'resno' THEN 1 ELSE 2 END LIMIT 1
 ), 'standardno');
+
+-- migration: 007-assignment-scheduling
+ALTER TABLE services ADD COLUMN scheduled_end_at TIMESTAMPTZ;
+UPDATE services SET scheduled_end_at=scheduled_at + INTERVAL '1 hour' WHERE scheduled_at IS NOT NULL;
+ALTER TABLE services ADD CONSTRAINT services_appointment_check
+    CHECK (scheduled_end_at IS NULL OR (scheduled_at IS NOT NULL AND scheduled_end_at > scheduled_at));
+CREATE TABLE service_assignments (
+    service_id BIGINT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+    responsibility VARCHAR(20) NOT NULL CHECK (responsibility IN ('cleaning','electrical','installer')),
+    is_leader BOOLEAN NOT NULL DEFAULT FALSE,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (service_id,employee_id)
+);
+CREATE UNIQUE INDEX service_assignments_one_leader ON service_assignments(service_id) WHERE is_leader;
+CREATE INDEX service_assignments_employee ON service_assignments(employee_id,service_id);
+INSERT INTO service_assignments (service_id,employee_id,responsibility,is_leader)
+    SELECT id,id_employee,service_type,true FROM services WHERE id_employee IS NOT NULL;
+CREATE TABLE notifications (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
+    employee_id BIGINT REFERENCES employees(id) ON DELETE CASCADE,
+    manager_id BIGINT REFERENCES managers(id) ON DELETE CASCADE,
+    service_id BIGINT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    kind VARCHAR(20) NOT NULL CHECK (kind IN ('scheduled','updated','removed','cancelled','completed')),
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at TIMESTAMPTZ,
+    CHECK (num_nonnulls(customer_id,employee_id,manager_id)=1)
+);

@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import type { Pool } from "pg";
 import { requireSession } from "./profiles.js";
+import { assignedTo } from "./assignmentAccess.js";
 import { requestFields } from "./requests.js";
 
 export function installManagerRoutes(router: Router, pool: Pool) {
@@ -32,7 +33,7 @@ export function installManagerRoutes(router: Router, pool: Pool) {
     try {
       const result = await pool.query(`SELECT e.id,e.first_name,e.last_name,e.email,e.service_type,
         COUNT(s.id) FILTER (WHERE s.status NOT IN ('completed','cancelled'))::int AS active_services
-        FROM employees e LEFT JOIN services s ON s.id_employee=e.id
+        FROM employees e LEFT JOIN services s ON ${assignedTo("e.id")}
         GROUP BY e.id ORDER BY e.last_name,e.first_name,e.id`);
       return response.json({ employees: result.rows });
     } catch {

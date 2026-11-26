@@ -124,6 +124,13 @@ Pravila, primeri in dokazila: [specifikacija zahtevkov](docs/specs/004-customer-
 
 ### Tri vrste računov
 
+Za US-09/11/12 ima vodja dodatno stran **Razporeditev** za veččlansko ekipo,
+vodjo, odgovornosti in termin z začetkom/koncem. Razpoložljivost in obremenitev se
+preverjata na strežniku, prekrivanja so zavrnjena tudi ob sočasnih zapisih.
+**Koledar** prikazuje termine glede na vlogo; zvonček odpira lastna trajna obvestila
+o dodelitvah, spremembah in preklicih. Po prevzemu zaženite lokalno migracijo 007.
+Podrobnosti: [dodeljevanje in termini](docs/specs/005-assignment-scheduling/spec.md).
+
 Pri prijavi ni izbire vloge. Skupni `POST /api/auth/login` sprejme `{ identifier, password }`
 in vrne račun z vlogo, določeno ob registraciji. `identifier` je e-pošta ali dodeljeno
 uporabniško ime; spremenjena vloga v zahtevi ne vpliva na prijavo.

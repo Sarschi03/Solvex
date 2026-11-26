@@ -35,6 +35,9 @@ export type PastService = {
 }
 
 export type Service = {
+  scheduled_end_at?: string | null
+  assigned_at?: string | null
+  can_report?: boolean
   id: string
   service_type: string
   urgency: 'nujno' | 'resno' | 'standardno'
