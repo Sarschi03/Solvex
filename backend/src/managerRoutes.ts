@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import type { Pool } from "pg";
 import { requireSession } from "./profiles.js";
+import { requestFields } from "./requests.js";
 
 export function installManagerRoutes(router: Router, pool: Pool) {
   router.get("/managers/overview", requireSession(pool, ["manager"]), async (_request, response) => {
@@ -17,10 +18,11 @@ export function installManagerRoutes(router: Router, pool: Pool) {
   });
   router.get("/managers/requests", requireSession(pool, ["manager"]), async (_request, response) => {
     try {
-      const result = await pool.query(`SELECT r.id,r.request_type,r.description,r.status,r.preferred_date,r.requested_at,
-        sp.name AS solar_plant_name,sp.installation_address,sp.city,c.first_name AS customer_first_name,c.last_name AS customer_last_name
+      const result = await pool.query(`SELECT ${requestFields},sp.installed_capacity_kw,sp.manufacturer,sp.installation_year,
+        c.first_name AS customer_first_name,c.last_name AS customer_last_name,c.email AS customer_email,c.phone AS customer_phone
         FROM service_requests r JOIN solar_plants sp ON sp.id_solar_plants=r.id_solar_plant
-        JOIN customers c ON c.id=sp.id_customer ORDER BY r.requested_at DESC,r.id DESC`);
+        JOIN customers c ON c.id=sp.id_customer
+        ORDER BY CASE r.urgency WHEN 'nujno' THEN 0 WHEN 'resno' THEN 1 ELSE 2 END,r.requested_at DESC,r.id DESC`);
       return response.json({ requests: result.rows });
     } catch {
       return response.status(500).json({ message: "Zahtevkov ni bilo mogoče naložiti." });

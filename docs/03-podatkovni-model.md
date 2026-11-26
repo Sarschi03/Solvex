@@ -109,3 +109,18 @@ Prikaz hiše uporablja obstoječa polja `solar_plants.panel_count`,
 Zgodovina v profilu uporablja samo zaključene servise lastnikovih elektrarn,
 brez internih servisnih zapisnikov.
 
+## Dopolnitev: oddaja in ocena zahtevkov
+
+Migracija `006-customer-requests` v `service_requests` doda `fault_type VARCHAR(100)`,
+`requested_services TEXT[]`, `urgency` (`standardno`, `resno`, `nujno`) ter
+`reviewed_by` (FK na vodjo) in `reviewed_at`. Obstoječi zapisi ostanejo; pri že
+povezanih servisih se začetna nujnost izpelje iz najvišje obstoječe nujnosti.
+Stare okvare lahko nimajo strukturirane vrste; nove jo morajo vsebovati prek API-ja.
+
+Zahtevek pripada elektrarni, lastnik pa se vedno določi prek `solar_plants.id_customer`
+in prijavljene seje. Osnovna oddaja ustvari stanje `submitted`; ocena vodje ga
+spremeni v `reviewing`. Želeni datum je predlog, termin pa ostane v `services.scheduled_at`.
+Povezava `services.id_service_request` ostane nespremenjena. Ocena nujnosti zaklene
+zahtevek in v transakciji posodobi povezane aktivne servise. Ob napaki se razveljavi vse.
+Poslovna pravila in API: [`specifikacija`](specs/004-customer-request-flow/spec.md).
+

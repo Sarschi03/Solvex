@@ -71,11 +71,12 @@ Lokalni demo: `demo-owner@solvex.local` / `SolvexDemo123!`. Za zaposlenega vpiš
 e-pošto zaposlenega; njegova prijava odpre ločen delovni prostor.
 
 Na podlagi `docs/06-wireframes.md` so pripravljene prazne strani za elektrarne,
-trenutne servise, pretekle servise in koristne informacije. Profil prek avatarja
+pretekle servise in koristne informacije. Profil prek avatarja
 zdaj prikazuje ime, shranjeno fotografijo, shematsko hišo z elektrarno in lastnikove
 zaključene servise. Fotografijo lahko zamenjate ali odstranite; shrani se v PostgreSQL.
-Prazne strani za redni pregled, prijavo okvare in priporočila so povezane z
-nadzorne plošče. Serviser ima dodatno prazen koledar.
+Obrazca za redni pregled in prijavo okvare sta povezana z API-jem; »Trenutni servisi«
+prikaže lastnikove shranjene zahtevke in servise. Stran priporočil ostaja predloga.
+Serviser ima dodatno prazen koledar.
 
 Fotografije PNG/JPEG/WebP do 5 MB se v brskalniku izrežejo in zmanjšajo na 256 × 256;
 API sprejme samo raster do 256 KB. Seja traja sedem dni in uporablja HttpOnly piškotek;
@@ -97,8 +98,29 @@ Lastništvo se preverja po seji. Pred uporabo nove kode lokalno zaženite
 `npm run db:migrate --prefix backend` (migracija 004 doda proizvajalca in leto).
 Polja, primer zahteve, pravila validacije in statusi so v
 [`specifikaciji API-ja`](docs/specs/003-owner-plants/spec.md).
-Vmesnik »Moje elektrarne« še ni povezan; ta korak pripravi podatkovni predpogoj
-za US-01 in US-02, ne oddaje okvare ali rednega pregleda.
+Samostojni vmesnik »Moje elektrarne« še ni povezan; elektrarno lahko lastnik
+doda tudi neposredno v obrazcu pred oddajo zahtevka.
+
+### Oddaja zahtevkov – US-01, US-02 in US-08
+
+Lastnik odpre **Prijavi okvaro** ali **Naroči pregled**, izbere svojo elektrarno
+oziroma jo doda v istem toku. Okvara zahteva vrsto in opis težave; redni pregled
+ponudi dodatno čiščenje panelov ter pregled baterije, električnih komponent ali
+nosilne konstrukcije. Želeni datum je neobvezen predlog, ne potrjen termin.
+Po uspešnem shranjevanju dobi potrditev in povezavo na **Trenutni servisi**.
+Tam vidi svoje zahtevke, stanje, ocenjeno nujnost in morebitne dodeljene servise/termine;
+zaključene zapise vključi z izbiro »Prikaži tudi zaključene«.
+
+Vodja v **Zahtevkih** vidi okvare in redne preglede ločeno, podatke elektrarne/lastnika,
+čas oddaje in opis. Določi nizko, srednjo ali visoko nujnost. Ob prvi oceni zahtevek
+preide iz »Oddan« v »V pregledu«; nujnost se v isti transakciji prenese na povezane
+aktivne servise, zato jo vidi tudi dodeljeni serviser. Zaprti zahtevki in zaključeni
+servisi se ne prepisujejo. Oddaja ne pošilja e-pošte; prejem pomeni trajen zapis v inboxu vodje.
+
+Po posodobitvi lokalno zaženite `npm run db:migrate --prefix backend` za migracijo 006.
+API: `GET/POST /api/requests`, `GET /api/requests/:requestId` in
+`PATCH /api/managers/requests/:requestId/urgency` ter obstoječi pregled vodje.
+Pravila, primeri in dokazila: [specifikacija zahtevkov](docs/specs/004-customer-request-flow/spec.md).
 
 ### Tri vrste računov
 
@@ -128,13 +150,13 @@ gesla se shranijo kot Argon2 hash. Ti testni računi niso bili ustvarjeni v prod
 
 | Račun | Trenutno dostopno |
 | --- | --- |
-| Lastnik | Osebna nadzorna plošča, lasten profil, fotografija, lastne elektrarne in zaključeni servisi v profilu. Ostale pripravljene strani so še prazne. |
+| Lastnik | Osebna nadzorna plošča, profil/fotografija, lastne elektrarne prek API-ja ali dodajanja pred zahtevkom, obrazca za okvaro/pregled, stanje zahtevkov in servisov ter zaključeni servisi v profilu. |
 | Serviser | Samo dodeljeni servisi, lastni osnutki in oddana poročila; pisanje/oddaja poročila le za trenutno dodeljen servis; profil in fotografija. |
-| Vodja servisa | Pregled dejanskih števcev, vseh zahtevkov in servisov, serviserjev z obremenitvijo ter oddanih poročil; lasten profil in fotografija. |
+| Vodja servisa | Pregled dejanskih števcev, ločen inbox okvar/pregledov z določanjem nujnosti, vsi servisi, serviserji z obremenitvijo, oddana poročila, lasten profil in fotografija. |
 
 Vodja je poslovna vloga, ločena od administratorja iz US-15. Ne ureja poročil
 serviserjev in ne upravlja računov. Koledar in zaloga sta pripravljeni strani;
-dodeljevanje nalog, skupine, urejanje nujnosti in terminov ter poslovna logika
+dodeljevanje nalog, skupine, urejanje terminov ter poslovna logika
 zaloge še sledijo v ločenih nalogah. Podroben obseg in preverjanje:
 [`docs/specs/002-account-roles-foundation/spec.md`](docs/specs/002-account-roles-foundation/spec.md).
 

@@ -4,6 +4,10 @@ Posodobitev: vloga se zdaj izbere samo ob registraciji. Enotni `/api/auth/login`
 jo ugotovi iz računa ob prijavi z e-pošto ali dodeljenim uporabniškim imenom.
 Migracija 005 in lokalni testni računi so opisani v README.
 
+Kasnejša izvedba US-01/02/08 je dokumentirana v
+[`004-customer-request-flow`](../004-customer-request-flow/spec.md).
+Spodnji obseg opisuje osnovo pred dodajanjem teh funkcionalnosti.
+
 ## Dogovorjeni obseg
 
 Uporabnik je 26. 11. 2026 izrecno izbral **odprto registracijo vseh treh vrst računov**

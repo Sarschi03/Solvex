@@ -8,6 +8,7 @@ import { installStaffAccountRoutes } from "./staffAccounts.js";
 import { installManagerRoutes } from "./managerRoutes.js";
 import { installPlantRoutes } from "./plants.js";
 import { installLoginRoute } from "./login.js";
+import { installRequestRoutes } from "./requests.js";
 
 const app = express();
 const router = express.Router();
@@ -33,6 +34,7 @@ installStaffAccountRoutes(router, pool);
 installManagerRoutes(router, pool);
 installPlantRoutes(router, pool);
 installLoginRoute(router, pool);
+installRequestRoutes(router, pool);
 
 router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
   const account = sessionAccount(response);

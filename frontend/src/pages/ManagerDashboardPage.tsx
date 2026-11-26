@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DashboardHeader } from '../components/DashboardHeader'
 import { DashboardIcon } from '../components/DashboardIcon'
+import { ManagerRequestInbox } from '../components/ManagerRequestInbox'
 import { useManagerData, type ManagerView } from '../hooks/useManagerData'
 import type { Account } from '../types'
 import ProfilePage from './ProfilePage'
@@ -41,9 +42,9 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
         {([['Aktivni servisi', data.overview.active_services], ['Odprti zahtevki', data.overview.pending_requests], ['Serviserji', data.overview.employees], ['Oddana poročila', data.overview.submitted_reports]] as const).map(([title, value]) => <article key={title}><span>{title}</span><strong>{value}</strong></article>)}
       </div>}
       {empty && <p>Za zdaj ni podatkov.</p>}
+      {view === 'requests' && <ManagerRequestInbox requests={data.requests ?? []} search={search} loading={loading} onChanged={retry} />}
       <div className="manager-records">
         {view === 'services' && data.services?.filter(item => matches([item.solar_plant_name, item.customer_first_name, item.customer_last_name, item.employee_first_name, item.employee_last_name])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.customer_first_name} {item.customer_last_name} · {item.installation_address}, {item.city}</p><p>{label(item.service_type)} · {label(item.urgency)} · {label(item.status)}</p><p>Serviser: {item.employee_first_name ? `${item.employee_first_name} ${item.employee_last_name}` : 'Ni dodeljen'}</p></article>)}
-        {view === 'requests' && data.requests?.filter(item => matches([item.solar_plant_name, item.customer_first_name, item.customer_last_name, item.description])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.customer_first_name} {item.customer_last_name} · {label(item.request_type)} · {label(item.status)}</p><p>{item.description || 'Brez dodatnega opisa.'}</p></article>)}
         {view === 'employees' && data.employees?.filter(item => matches([item.first_name, item.last_name, item.email])).map(item => <article key={item.id}><h2>{item.first_name} {item.last_name}</h2><p>{label(item.service_type)} · {item.email}</p><p>Aktivni servisi: {item.active_services}</p></article>)}
         {view === 'reports' && data.reports?.filter(item => matches([item.solar_plant_name, item.employee_first_name, item.employee_last_name, item.work_summary])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.employee_first_name} {item.employee_last_name} · {label(item.service_type)}</p><h3>Opravljeno delo</h3><p>{item.work_summary}</p>{item.findings && <><h3>Ugotovitve</h3><p>{item.findings}</p></>}{item.recommendations && <><h3>Priporočila</h3><p>{item.recommendations}</p></>}</article>)}
       </div>

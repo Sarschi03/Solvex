@@ -217,7 +217,7 @@ describe('Nadzorna plošča prijavljenega lastnika', () => {
     render(<App />)
     const user = userEvent.setup()
     expect(await screen.findByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })).toBeTruthy()
-    for (const name of ['Moje elektrarne', 'Trenutni servisi', 'Pretekli servisi', 'Koristne informacije']) {
+    for (const name of ['Moje elektrarne', 'Pretekli servisi', 'Koristne informacije']) {
       await user.click(screen.getByRole('button', { name }))
       expect((await screen.findByRole('region', { name })).childElementCount).toBe(0)
     }
@@ -229,17 +229,17 @@ describe('Nadzorna plošča prijavljenega lastnika', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.anything())
   })
 
-  it('povezave in priporočila vodijo na prazne strani, iskanje pa filtrira vsebino', async () => {
+  it('povezave odprejo obrazce, priporočila ostanejo predloga in iskanje filtrira vsebino', async () => {
     window.history.replaceState(null, '', '#lastnik')
     restoreOwner()
     render(<App />)
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })
     await user.click(screen.getByRole('link', { name: /Naroči pregled/ }))
-    expect((await screen.findByRole('region', { name: 'Naroči pregled' })).childElementCount).toBe(0)
+    expect(await screen.findByRole('heading', { name: 'Naroči pregled' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Domov' }))
     await user.click(await screen.findByRole('link', { name: /Prijavi okvaro/ }))
-    expect((await screen.findByRole('region', { name: 'Prijavi okvaro' })).childElementCount).toBe(0)
+    expect(await screen.findByRole('heading', { name: 'Prijavi okvaro' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Domov' }))
     await user.click(await screen.findByRole('link', { name: /Redni pregledi, manj skrbi/ }))
     expect((await screen.findByRole('region', { name: 'Priporočila' })).childElementCount).toBe(0)

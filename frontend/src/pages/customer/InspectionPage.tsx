@@ -1,3 +1,2 @@
-export default function InspectionPage() {
-  return <section className="dashboard-blank-page" aria-label="Naroči pregled" />
-}
+import { CustomerRequestForm } from '../../components/CustomerRequestForm'
+export default function InspectionPage() { return <CustomerRequestForm type="regular_inspection" /> }

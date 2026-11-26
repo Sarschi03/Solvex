@@ -147,3 +147,22 @@ CREATE TABLE account_usernames (
     manager_id BIGINT UNIQUE REFERENCES managers(id) ON DELETE CASCADE,
     CHECK (num_nonnulls(customer_id, employee_id, manager_id) = 1)
 );
+
+-- migration: 006-customer-requests
+ALTER TABLE service_requests
+    ADD COLUMN fault_type VARCHAR(100),
+    ADD COLUMN requested_services TEXT[] NOT NULL DEFAULT '{}',
+    ADD COLUMN urgency VARCHAR(20) NOT NULL DEFAULT 'standardno'
+        CHECK (urgency IN ('standardno','resno','nujno')),
+    ADD COLUMN reviewed_by BIGINT REFERENCES managers(id) ON DELETE SET NULL,
+    ADD COLUMN reviewed_at TIMESTAMPTZ,
+    ADD CONSTRAINT service_requests_fault_type_check CHECK (
+        fault_type IS NULL OR (request_type='fault_report' AND LENGTH(BTRIM(fault_type))>0)),
+    ADD CONSTRAINT service_requests_extras_check CHECK (
+        requested_services <@ ARRAY['panel_cleaning','battery_inspection','electrical_inspection','mounting_inspection']::text[]
+        AND array_position(requested_services,NULL) IS NULL
+        AND (request_type='regular_inspection' OR cardinality(requested_services)=0));
+UPDATE service_requests r SET urgency = COALESCE((
+    SELECT s.urgency FROM services s WHERE s.id_service_request=r.id
+    ORDER BY CASE s.urgency WHEN 'nujno' THEN 0 WHEN 'resno' THEN 1 ELSE 2 END LIMIT 1
+), 'standardno');

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { apiBase } from '../lib/api'
 import type { Service, ServiceReport } from '../types'
+import type { CustomerRequest } from '../lib/requestFlow'
 
 export type ManagerView = 'overview' | 'requests' | 'services' | 'employees' | 'reports' | 'calendar' | 'inventory' | 'profile'
-export type ManagerRequest = {
-  id: string; request_type: string; description: string | null; status: string
-  solar_plant_name: string; customer_first_name: string; customer_last_name: string
+export type ManagerRequest = CustomerRequest & {
+  customer_first_name: string; customer_last_name: string; customer_email: string; customer_phone: string | null
+  installed_capacity_kw: string | null; manufacturer: string | null; installation_year: number | null
 }
 export type ManagerEmployee = { id: string; first_name: string; last_name: string; email: string; service_type: string; active_services: number }
 type ManagerData = {

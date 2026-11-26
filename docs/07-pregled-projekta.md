@@ -11,6 +11,11 @@ bralni pregled vodje. Stare navedbe o javnem API-ju in odsotnosti lastnikove pri
 opisujejo prevzeto verzijo. Dejanski novi obseg, pravice in še manjkajoča merila so v
 [`specs/002-account-roles-foundation/spec.md`](specs/002-account-roles-foundation/spec.md).
 
+Nadaljnja izvedba doda upravljanje elektrarn prek API-ja ter celoten tok oddaje
+okvar/pregledov, lastnikovo stanje in oceno nujnosti vodje. Dokazila in trenutno
+izpolnjena merila US-01/02/08 so v
+[`specifikaciji zahtevkov`](specs/004-customer-request-flow/spec.md).
+
 ## Implementirane funkcionalnosti MVP
 
 Deluje prijava zaposlenega z e-pošto in geslom (Argon2). Serviserjev vmesnik prikazuje
