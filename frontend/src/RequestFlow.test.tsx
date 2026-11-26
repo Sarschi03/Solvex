@@ -119,6 +119,11 @@ describe('Obrazci lastnika', () => {
 })
 
 describe('Stanje in pregled vodje', () => {
+  it('vodja iz zahtevka odpre dodeljevanje s pravim ID-jem',async()=>{
+    const assign=vi.fn()
+    render(<ManagerRequestInbox requests={[managerFault]} search="" loading={false} onChanged={()=>{}} onAssign={assign}/>)
+    const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Dodeli servis'}));expect(assign).toHaveBeenCalledWith('7')
+  })
   it('prikaže lastnikove zahtevke, termine servisov in po izbiri tudi zaključene', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ requests: [fault, { ...fault, id: '8', status: 'completed', solar_plant_name: 'Zaključena elektrarna' }], services: [{ id: '9', id_service_request: '7', solar_plant_name: plant.name, service_type: 'electrical', status: 'scheduled', urgency: 'nujno', scheduled_at: '2026-12-01T10:00:00Z', completed_at: null }] })))
     render(<CurrentServicesPage />)

@@ -77,6 +77,7 @@ async function customerSession() {
 }
 
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+const completeReport = { performed_at:'2020-01-01T10:00:00Z',plant_condition:'operational',outcome:'resolved',fault_found:false };
 
 describe('Enotna prijava brez izbire vloge', () => {
   const password = 'TestPassword123!';
@@ -378,7 +379,7 @@ describe('Tri vrste računov in strežniška pooblastila', () => {
   });
 
   it('vodja bere le oddana poročila in ne more pisati poročil serviserja', async () => {
-    const created = await accountRequest(`/employees/${employeeId}/service-reports`, employeeCookie, 'POST', { id_service: serviceId, work_summary: 'Za preverjanje pravic vodje' });
+    const created = await accountRequest(`/employees/${employeeId}/service-reports`, employeeCookie, 'POST', { ...completeReport,id_service: serviceId, work_summary: 'Za preverjanje pravic vodje' });
     assert.equal(created.status, 201);
     const id = created.body.report.id;
     assert.deepEqual((await accountRequest('/managers/service-reports', managerCookie)).body.reports, []);
@@ -389,6 +390,7 @@ describe('Tri vrste računov in strežniška pooblastila', () => {
     await accountRequest(`/employees/${employeeId}/service-reports/${id}/submit`, employeeCookie, 'POST');
     assert.equal((await accountRequest('/managers/service-reports', managerCookie)).body.reports[0].id, id);
     await pool.query('DELETE FROM service_reports WHERE id=$1', [id]);
+    await pool.query("UPDATE services SET status='planned',completed_at=NULL WHERE id=$1",[serviceId]);
   });
 
   it('ob prerazporeditvi servisa prejšnji serviser ne more urejati ali oddati osnutka', async () => {
@@ -563,7 +565,7 @@ describe('API s pravo PostgreSQL bazo', () => {
   });
 
   it('ustvari poročilo in prepreči podvojitev za isti servis', async () => {
-    const body = { id_service: serviceId, work_summary: 'Pregled opravljen', findings: 'Brez napak' };
+    const body = { ...completeReport,id_service: serviceId, work_summary: 'Pregled opravljen', findings: 'Brez napak' };
     const result = await request(`/employees/${employeeId}/service-reports`, 'POST', body);
     assert.equal(result.status, 201);
     assert.equal(result.body.report.work_summary, body.work_summary);

@@ -56,6 +56,12 @@ export type Service = {
 }
 
 export type ServiceReport = {
+  performed_at?: string | null
+  plant_condition?: 'operational' | 'limited' | 'not_operational' | null
+  outcome?: 'resolved' | 'follow_up' | null
+  fault_found?: boolean | null
+  fault_cause?: string | null
+  parts_used?: ReportPart[]
   id: string
   id_service: string
   service_type: string
@@ -68,6 +74,7 @@ export type ServiceReport = {
   employee_first_name: string
   employee_last_name: string
 }
+export type ReportPart = { name: string; manufacturer: string | null; quantity: number; replaced: boolean; installed_on: string | null }
 
 export type DashboardPage = 'services' | 'reports' | 'profile' | 'calendar'
 export type CustomerPage = 'overview' | 'plants' | 'current-services' | 'history' | 'information' | 'recommendations' | 'profile' | 'inspection' | 'fault'

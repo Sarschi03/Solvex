@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { requireSession, sessionAccount } from "./profiles.js";
 
 export const requestFields = `r.id,r.id_solar_plant,r.request_type,r.fault_type,r.description,r.requested_services,
-  r.status,r.urgency,to_char(r.preferred_date,'YYYY-MM-DD') AS preferred_date,r.requested_at,
+  r.status,r.urgency,r.follow_up_required,to_char(r.preferred_date,'YYYY-MM-DD') AS preferred_date,r.requested_at,
   sp.name AS solar_plant_name,sp.installation_address,sp.postal_code,sp.city`;
 const extras = ["panel_cleaning", "battery_inspection", "electrical_inspection", "mounting_inspection"];
 const validId = (id: unknown): id is string => typeof id === "string" && /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;

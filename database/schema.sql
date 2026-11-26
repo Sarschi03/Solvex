@@ -196,3 +196,13 @@ CREATE TABLE notifications (
     read_at TIMESTAMPTZ,
     CHECK (num_nonnulls(customer_id,employee_id,manager_id)=1)
 );
+
+-- migration: 008-technician-workflow
+ALTER TABLE service_reports
+    ADD COLUMN performed_at TIMESTAMPTZ,
+    ADD COLUMN plant_condition VARCHAR(20) CHECK (plant_condition IN ('operational','limited','not_operational')),
+    ADD COLUMN outcome VARCHAR(20) CHECK (outcome IN ('resolved','follow_up')),
+    ADD COLUMN fault_found BOOLEAN,
+    ADD COLUMN fault_cause TEXT,
+    ADD COLUMN parts_used JSONB NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(parts_used)='array');
+ALTER TABLE service_requests ADD COLUMN follow_up_required BOOLEAN NOT NULL DEFAULT FALSE;

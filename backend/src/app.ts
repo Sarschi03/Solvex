@@ -9,8 +9,9 @@ import { installManagerRoutes } from "./managerRoutes.js";
 import { installPlantRoutes } from "./plants.js";
 import { installLoginRoute } from "./login.js";
 import { installRequestRoutes } from "./requests.js";
+import { installTechnicianRoutes } from "./technician.js";
 import { installSchedulingRoutes } from "./scheduling.js";
-import { assignedTo } from "./assignmentAccess.js";
+import { assignedTo, leaderOf } from "./assignmentAccess.js";
 
 const app = express();
 const router = express.Router();
@@ -38,6 +39,7 @@ installPlantRoutes(router, pool);
 installLoginRoute(router, pool);
 installRequestRoutes(router, pool);
 installSchedulingRoutes(router, pool);
+installTechnicianRoutes(router, pool);
 
 router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
   const account = sessionAccount(response);
@@ -51,7 +53,7 @@ router.get("/services", requireSession(pool, ["employee", "manager"]), async (_r
         s.scheduled_at,
         s.scheduled_end_at,
         (SELECT assigned_at FROM service_assignments sa WHERE sa.service_id=s.id AND sa.employee_id=$1) AS assigned_at,
-        s.id_employee=$1 AS can_report,
+        ${leaderOf("$1")} AS can_report,
         s.completed_at,
         s.notes,
         sp.name AS solar_plant_name,
@@ -98,7 +100,7 @@ router.get("/employees/:employeeId/services", requireSession(pool, ["employee", 
         s.scheduled_at,
         s.scheduled_end_at,
         (SELECT assigned_at FROM service_assignments sa WHERE sa.service_id=s.id AND sa.employee_id=$1) AS assigned_at,
-        s.id_employee=$1 AS can_report,
+        ${leaderOf("$1")} AS can_report,
         s.completed_at,
         s.notes,
         sp.name AS solar_plant_name,
@@ -127,332 +129,6 @@ router.get("/employees/:employeeId/services", requireSession(pool, ["employee", 
     });
   }
 });
-
-router.get("/employees/:employeeId/service-reports", requireSession(pool, ["employee", "manager"], true), async (request, response) => {
-  const { employeeId } = request.params;
-
-  if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
-    return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
-  }
-
-  try {
-    const result = await pool.query(
-      `SELECT
-        sr.id,
-        sr.id_service,
-        s.service_type,
-        sp.name AS solar_plant_name,
-        sr.work_summary,
-        sr.findings,
-        sr.recommendations,
-        sr.reported_at,
-        sr.submitted_at,
-        e.first_name AS employee_first_name,
-        e.last_name AS employee_last_name
-      FROM service_reports sr
-      JOIN services s ON s.id = sr.id_service
-      JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
-      JOIN employees e ON e.id = sr.id_employee
-      WHERE sr.id_employee = $1
-        AND ($2::boolean OR s.id_employee = $1)
-        AND (NOT $2::boolean OR sr.submitted_at IS NOT NULL)
-      ORDER BY sr.reported_at DESC, sr.id DESC`,
-      [employeeId, sessionAccount(response).role === "manager"],
-    );
-
-    return response.status(200).json({ reports: result.rows });
-  } catch (error) {
-    console.error("Service report list failed:", error);
-
-    return response.status(500).json({
-      message: "Seznama servisnih poročil ni bilo mogoče naložiti.",
-    });
-  }
-});
-
-router.post("/employees/:employeeId/service-reports", requireSession(pool, ["employee"], true), async (request, response) => {
-  const { employeeId } = request.params;
-  const body = (request.body ?? {}) as Record<string, unknown>;
-  const serviceId =
-    typeof body.id_service === "string" || typeof body.id_service === "number"
-      ? String(body.id_service).trim()
-      : "";
-  const workSummary =
-    typeof body.work_summary === "string" ? body.work_summary.trim() : "";
-  const findings =
-    typeof body.findings === "string" ? body.findings.trim() || null : null;
-  const recommendations =
-    typeof body.recommendations === "string"
-      ? body.recommendations.trim() || null
-      : null;
-  const reportedAt =
-    typeof body.reported_at === "string" && body.reported_at.trim()
-      ? new Date(body.reported_at)
-      : null;
-
-  if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
-    return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
-  }
-
-  if (!/^\d+$/.test(serviceId) || /^0+$/.test(serviceId)) {
-    return response.status(400).json({ message: "Izberi veljaven servis." });
-  }
-
-  if (!workSummary) {
-    return response.status(400).json({ message: "Povzetek dela je obvezen." });
-  }
-
-  if (reportedAt && Number.isNaN(reportedAt.getTime())) {
-    return response.status(400).json({ message: "Datum poročila ni veljaven." });
-  }
-
-  try {
-    const result = await pool.query(
-      `WITH inserted_report AS (
-        INSERT INTO service_reports
-          (id_service, id_employee, work_summary, findings, recommendations, reported_at)
-        SELECT $1, $2, $3, $4, $5, COALESCE($6::timestamptz, NOW())
-        FROM services s
-        WHERE s.id = $1 AND s.id_employee = $2
-        RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-          submitted_at, id_employee
-      )
-      SELECT
-        ir.id,
-        ir.id_service,
-        s.service_type,
-        sp.name AS solar_plant_name,
-        ir.work_summary,
-        ir.findings,
-        ir.recommendations,
-        ir.reported_at,
-        ir.submitted_at,
-        e.first_name AS employee_first_name,
-        e.last_name AS employee_last_name
-      FROM inserted_report ir
-      JOIN services s ON s.id = ir.id_service
-      JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
-      JOIN employees e ON e.id = ir.id_employee`,
-      [
-        serviceId,
-        employeeId,
-        workSummary,
-        findings,
-        recommendations,
-        reportedAt?.toISOString() ?? null,
-      ],
-    );
-
-    if (result.rowCount === 0) {
-      return response.status(400).json({
-        message: "Izbrani servis ni dodeljen prijavljenemu zaposlenemu.",
-      });
-    }
-
-    return response.status(201).json({
-      message: "Servisno poročilo je shranjeno.",
-      report: result.rows[0],
-    });
-  } catch (error) {
-    if ((error as { code?: string }).code === "23505") {
-      return response.status(409).json({
-        message: "Za ta servis servisno poročilo že obstaja.",
-      });
-    }
-
-    console.error("Service report creation failed:", error);
-
-    return response.status(500).json({
-      message: "Servisnega poročila ni bilo mogoče shraniti.",
-    });
-  }
-});
-
-router.put(
-  "/employees/:employeeId/service-reports/:reportId",
-  requireSession(pool, ["employee"], true),
-  async (request, response) => {
-    const { employeeId, reportId } = request.params;
-    const body = (request.body ?? {}) as Record<string, unknown>;
-    const workSummary =
-      typeof body.work_summary === "string" ? body.work_summary.trim() : "";
-    const findings =
-      typeof body.findings === "string" ? body.findings.trim() || null : null;
-    const recommendations =
-      typeof body.recommendations === "string"
-        ? body.recommendations.trim() || null
-        : null;
-    const reportedAt =
-      typeof body.reported_at === "string" && body.reported_at.trim()
-        ? new Date(body.reported_at)
-        : null;
-
-    if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
-      return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
-    }
-
-    if (typeof reportId !== "string" || !/^\d+$/.test(reportId) || /^0+$/.test(reportId)) {
-      return response.status(400).json({ message: "ID poročila ni veljaven." });
-    }
-
-    if (!workSummary) {
-      return response.status(400).json({ message: "Povzetek dela je obvezen." });
-    }
-
-    if (reportedAt && Number.isNaN(reportedAt.getTime())) {
-      return response.status(400).json({ message: "Datum poročila ni veljaven." });
-    }
-
-    try {
-      const result = await pool.query(
-        `WITH updated_report AS (
-          UPDATE service_reports
-          SET
-            work_summary = $3,
-            findings = $4,
-            recommendations = $5,
-            reported_at = COALESCE($6::timestamptz, reported_at)
-          WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
-            AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)
-          RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-            submitted_at, id_employee
-        )
-        SELECT
-          ur.id,
-          ur.id_service,
-          s.service_type,
-          sp.name AS solar_plant_name,
-          ur.work_summary,
-          ur.findings,
-          ur.recommendations,
-          ur.reported_at,
-          ur.submitted_at,
-          e.first_name AS employee_first_name,
-          e.last_name AS employee_last_name
-        FROM updated_report ur
-        JOIN services s ON s.id = ur.id_service
-        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
-        JOIN employees e ON e.id = ur.id_employee`,
-        [
-          reportId,
-          employeeId,
-          workSummary,
-          findings,
-          recommendations,
-          reportedAt?.toISOString() ?? null,
-        ],
-      );
-
-      if (result.rowCount === 0) {
-        const existingReport = await pool.query(
-          `SELECT submitted_at
-          FROM service_reports
-          WHERE id = $1 AND id_employee = $2
-              AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)`,
-          [reportId, employeeId],
-        );
-
-        if (existingReport.rows[0]?.submitted_at) {
-          return response.status(409).json({
-            message: "Oddanega servisnega poročila ni več mogoče urejati.",
-          });
-        }
-
-        return response.status(404).json({
-          message: "Servisno poročilo ni bilo najdeno.",
-        });
-      }
-
-      return response.status(200).json({
-        message: "Servisno poročilo je posodobljeno.",
-        report: result.rows[0],
-      });
-    } catch (error) {
-      console.error("Service report update failed:", error);
-
-      return response.status(500).json({
-        message: "Servisnega poročila ni bilo mogoče posodobiti.",
-      });
-    }
-  },
-);
-
-router.post(
-  "/employees/:employeeId/service-reports/:reportId/submit",
-  requireSession(pool, ["employee"], true),
-  async (request, response) => {
-    const { employeeId, reportId } = request.params;
-
-    if (typeof employeeId !== "string" || !/^\d+$/.test(employeeId) || /^0+$/.test(employeeId)) {
-      return response.status(400).json({ message: "ID zaposlenega ni veljaven." });
-    }
-
-    if (typeof reportId !== "string" || !/^\d+$/.test(reportId) || /^0+$/.test(reportId)) {
-      return response.status(400).json({ message: "ID poročila ni veljaven." });
-    }
-
-    try {
-      const result = await pool.query(
-        `WITH submitted_report AS (
-          UPDATE service_reports
-          SET submitted_at = NOW()
-          WHERE id = $1 AND id_employee = $2 AND submitted_at IS NULL
-            AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)
-          RETURNING id, id_service, work_summary, findings, recommendations, reported_at,
-            submitted_at, id_employee
-        )
-        SELECT
-          sr.id,
-          sr.id_service,
-          s.service_type,
-          sp.name AS solar_plant_name,
-          sr.work_summary,
-          sr.findings,
-          sr.recommendations,
-          sr.reported_at,
-          sr.submitted_at,
-          e.first_name AS employee_first_name,
-          e.last_name AS employee_last_name
-        FROM submitted_report sr
-        JOIN services s ON s.id = sr.id_service
-        JOIN solar_plants sp ON sp.id_solar_plants = s.id_solar_plant
-        JOIN employees e ON e.id = sr.id_employee`,
-        [reportId, employeeId],
-      );
-
-      if (result.rowCount === 0) {
-        const existingReport = await pool.query(
-          `SELECT submitted_at
-          FROM service_reports
-          WHERE id = $1 AND id_employee = $2
-              AND EXISTS (SELECT 1 FROM services s WHERE s.id=service_reports.id_service AND s.id_employee=$2)`,
-          [reportId, employeeId],
-        );
-
-        if (!existingReport.rows[0]) {
-          return response.status(404).json({
-            message: "Servisno poročilo ni bilo najdeno.",
-          });
-        }
-
-        return response.status(409).json({
-          message: "Servisno poročilo je že oddano.",
-        });
-      }
-
-      return response.status(200).json({
-        message: "Servisno poročilo je oddano in zaklenjeno za urejanje.",
-        report: result.rows[0],
-      });
-    } catch (error) {
-      console.error("Service report submission failed:", error);
-
-      return response.status(500).json({
-        message: "Servisnega poročila ni bilo mogoče oddati.",
-      });
-    }
-  },
-);
 
 router.post("/employees/login", async (request, response) => {
   const body = (request.body ?? {}) as Record<string, unknown>;

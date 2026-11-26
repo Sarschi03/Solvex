@@ -7,6 +7,7 @@ import type { Account } from '../types'
 import ProfilePage from './ProfilePage'
 import SchedulingPage from './SchedulingPage'
 import CalendarPage from './CalendarPage'
+import { ReportSummary } from '../components/ReportSummary'
 import './DashboardPage.css'
 import './ManagerDashboardPage.css'
 
@@ -24,6 +25,7 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
 }) {
   const [view, setView] = useState<ManagerView>('overview')
   const [search, setSearch] = useState('')
+  const [planningRequestId,setPlanningRequestId] = useState<string>()
   const { data, loading, error, retry } = useManagerData(view)
   const matches = (values: (string | null)[]) => values.join(' ').toLocaleLowerCase('sl').includes(search.toLocaleLowerCase('sl'))
   function navigate(next: ManagerView) { setSearch(''); setView(next) }
@@ -36,7 +38,7 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
       <button className="sidebar-logout" type="button" aria-label="Odjava" title="Odjava" onClick={onLogout}><DashboardIcon name="logout" /></button>
     </aside>
     <DashboardHeader isProfile={view === 'profile'} onProfile={() => navigate('profile')} profileImage={account.profile_image_data} searchValue={search} searchLabel="Išči po pregledu vodje" onSearch={setSearch} />
-    {view === 'profile' ? <ProfilePage account={account} onAccountChange={onAccountChange} /> : view === 'planning' ? <SchedulingPage /> : view === 'calendar' ? <CalendarPage /> : <section className="dashboard-content manager-content">
+    {view === 'profile' ? <ProfilePage account={account} onAccountChange={onAccountChange} /> : view === 'planning' ? <SchedulingPage requestId={planningRequestId} /> : view === 'calendar' ? <CalendarPage /> : <section className="dashboard-content manager-content">
       <h1>{view === 'overview' ? `Dober dan, ${account.first_name}.` : navigation.find(([id]) => id === view)?.[1]}</h1>
       {view === 'overview' && <p>Pregled servisne ekipe in dela.</p>}
       {loading && <p role="status">Nalaganje podatkov ...</p>}
@@ -45,11 +47,11 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
         {([['Aktivni servisi', data.overview.active_services], ['Odprti zahtevki', data.overview.pending_requests], ['Serviserji', data.overview.employees], ['Oddana poročila', data.overview.submitted_reports]] as const).map(([title, value]) => <article key={title}><span>{title}</span><strong>{value}</strong></article>)}
       </div>}
       {empty && <p>Za zdaj ni podatkov.</p>}
-      {view === 'requests' && <ManagerRequestInbox requests={data.requests ?? []} search={search} loading={loading} onChanged={retry} />}
+      {view === 'requests' && <ManagerRequestInbox requests={data.requests ?? []} search={search} loading={loading} onChanged={retry} onAssign={id=>{setPlanningRequestId(id);setView('planning')}} />}
       <div className="manager-records">
         {view === 'services' && data.services?.filter(item => matches([item.solar_plant_name, item.customer_first_name, item.customer_last_name, item.employee_first_name, item.employee_last_name])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.customer_first_name} {item.customer_last_name} · {item.installation_address}, {item.city}</p><p>{label(item.service_type)} · {label(item.urgency)} · {label(item.status)}</p><p>Serviser: {item.employee_first_name ? `${item.employee_first_name} ${item.employee_last_name}` : 'Ni dodeljen'}</p></article>)}
         {view === 'employees' && data.employees?.filter(item => matches([item.first_name, item.last_name, item.email])).map(item => <article key={item.id}><h2>{item.first_name} {item.last_name}</h2><p>{label(item.service_type)} · {item.email}</p><p>Aktivni servisi: {item.active_services}</p></article>)}
-        {view === 'reports' && data.reports?.filter(item => matches([item.solar_plant_name, item.employee_first_name, item.employee_last_name, item.work_summary])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.employee_first_name} {item.employee_last_name} · {label(item.service_type)}</p><h3>Opravljeno delo</h3><p>{item.work_summary}</p>{item.findings && <><h3>Ugotovitve</h3><p>{item.findings}</p></>}{item.recommendations && <><h3>Priporočila</h3><p>{item.recommendations}</p></>}</article>)}
+        {view === 'reports' && data.reports?.filter(item => matches([item.solar_plant_name, item.employee_first_name, item.employee_last_name, item.work_summary])).map(item => <article key={item.id}><h2>{item.solar_plant_name}</h2><p>{item.employee_first_name} {item.employee_last_name} · {label(item.service_type)}</p><h3>Opravljeno delo</h3><p>{item.work_summary}</p>{item.findings && <><h3>Ugotovitve</h3><p>{item.findings}</p></>}{item.recommendations && <><h3>Priporočila</h3><p>{item.recommendations}</p></>}<ReportSummary report={item}/></article>)}
       </div>
       {view === 'inventory' && <p>Ta funkcionalnost še ni implementirana.</p>}
     </section>}

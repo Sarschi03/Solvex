@@ -16,6 +16,12 @@ okvar/pregledov, lastnikovo stanje in oceno nujnosti vodje. Dokazila in trenutno
 izpolnjena merila US-01/02/08 so v
 [`specifikaciji zahtevkov`](specs/004-customer-request-flow/spec.md).
 
+Naslednja ločena koraka dodata ekipne dodelitve, termine/koledar in obvestila
+([spec 005](specs/005-assignment-scheduling/spec.md)) ter serviserjeve podrobnosti,
+strukturirana poročila in atomski zaključek
+([spec 006](specs/006-technician-workflow/spec.md)). Spodnji prvotni pregled ni
+merilo trenutne implementacije; stanje in dokazila so v teh specifikacijah.
+
 ## Implementirane funkcionalnosti MVP
 
 Deluje prijava zaposlenega z e-pošto in geslom (Argon2). Serviserjev vmesnik prikazuje

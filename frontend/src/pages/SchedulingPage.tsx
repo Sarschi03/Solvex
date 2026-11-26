@@ -9,7 +9,7 @@ type Technician = { id: string; first_name: string; last_name: string; service_t
 const specialties: Record<string,string> = { electrical: 'Elektro servis', cleaning: 'Čiščenje', installer: 'Montaža' }
 const localDate = (value: string | null) => { if (!value) return ''; const date = new Date(value); date.setMinutes(date.getMinutes()-date.getTimezoneOffset()); return date.toISOString().slice(0,16) }
 
-function ScheduleForm({ service, requests, technicians, onSaved }: { service?: ScheduledService; requests: CustomerRequest[]; technicians: Technician[]; onSaved: () => void }) {
+function ScheduleForm({ service, requests, technicians, onSaved, requestId }: { service?: ScheduledService; requests: CustomerRequest[]; technicians: Technician[]; onSaved: () => void; requestId?: string }) {
   const [members, setMembers] = useState<string[]>(service?.assignments.map(item => item.employee_id) ?? [])
   const [leader, setLeader] = useState(service?.assignments.find(item => item.is_leader)?.employee_id ?? '')
   const [start, setStart] = useState(localDate(service?.scheduled_at ?? null))
@@ -39,7 +39,7 @@ function ScheduleForm({ service, requests, technicians, onSaved }: { service?: S
   }
   return <form className="request-form" aria-label="Razporeditev servisa" onSubmit={save}>
     <fieldset disabled={saving}><legend>{service ? `Uredi servis #${service.id}` : 'Nova dodelitev'}</legend>
-      {!service && <label>Zahtevek<select name="request_id" required defaultValue=""><option value="" disabled>Izberi zahtevek</option>{requests.filter(item => !['completed','cancelled','rejected'].includes(item.status)).map(item => <option key={item.id} value={item.id}>#{item.id} · {item.solar_plant_name} · {item.urgency}</option>)}</select></label>}
+      {!service && <label>Zahtevek<select name="request_id" required defaultValue={requestId ?? ''}><option value="" disabled>Izberi zahtevek</option>{requests.filter(item => !['completed','cancelled','rejected'].includes(item.status)).map(item => <option key={item.id} value={item.id}>#{item.id} · {item.solar_plant_name} · {item.urgency}</option>)}</select></label>}
       <label>Vrsta servisa<select name="service_type" defaultValue={service?.service_type ?? 'electrical'}>{Object.entries(specialties).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <div className="request-field-row"><label>Začetek termina<input type="datetime-local" value={start} required onChange={event => { setStart(event.target.value); setAvailability([]) }} /></label><label>Konec termina / rok<input type="datetime-local" value={end} required onChange={event => { setEnd(event.target.value); setAvailability([]) }} /></label></div>
       <button type="button" disabled={!start || !end} onClick={() => void check()}>Preveri razpoložljivost</button>
@@ -54,7 +54,7 @@ function ScheduleForm({ service, requests, technicians, onSaved }: { service?: S
     </fieldset>{error && <p role="alert">{error}</p>}
   </form>
 }
-export default function SchedulingPage() {
+export default function SchedulingPage({ requestId }: { requestId?: string } = {}) {
   const schedules = useApiResource<{ services: ScheduledService[] }>('/managers/schedule')
   const requests = useApiResource<{ requests: CustomerRequest[] }>('/managers/requests')
   const employees = useApiResource<{ employees: Technician[] }>('/managers/employees')
@@ -80,7 +80,7 @@ export default function SchedulingPage() {
     {loadError && <div role="alert">{loadError}<button type="button" onClick={refresh}>Poskusi znova</button></div>}
     {!loading && !loadError && <>
       <label>Servis za urejanje<select className="request-filter" aria-label="Servis za urejanje" value={selected} onChange={event => { setSelected(event.target.value); setNotice('') }}><option value="">Nova dodelitev</option>{schedules.data?.services.filter(item => !['completed','cancelled'].includes(item.status)).map(item => <option key={item.id} value={item.id}>#{item.id} · {item.solar_plant_name} · {formatRequestDate(item.scheduled_at,true)}</option>)}</select></label>
-      <ScheduleForm key={selected} service={service} requests={requests.data?.requests ?? []} technicians={employees.data?.employees ?? []} onSaved={() => { setNotice('Razporeditev je shranjena. Ekipa in lastnik sta obveščena.'); refresh() }} />
+      <ScheduleForm key={selected} requestId={requestId} service={service} requests={requests.data?.requests ?? []} technicians={employees.data?.employees ?? []} onSaved={() => { setNotice('Razporeditev je shranjena. Ekipa in lastnik sta obveščena.'); refresh() }} />
       {service && <button className="request-secondary" type="button" disabled={cancelling} onClick={() => void cancel()}>Prekliči servis</button>}
     </>}
   </section>

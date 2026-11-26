@@ -4,6 +4,7 @@ import type { Service } from '../types'
 export type RequestType = 'fault_report' | 'regular_inspection'
 export type RequestUrgency = Service['urgency']
 export type CustomerRequest = {
+  follow_up_required?: boolean
   id: string; id_solar_plant: string; request_type: RequestType; fault_type: string | null
   description: string | null; requested_services: string[]; preferred_date: string | null
   requested_at: string; urgency: RequestUrgency; status: string; solar_plant_name: string

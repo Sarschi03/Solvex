@@ -48,6 +48,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
       !specialties.includes(body.service_type) || !positiveId(body.leader_id) || !interval(body.scheduled_at, body.scheduled_end_at) || Date.parse(body.scheduled_at) < Date.now() ||
       !Array.isArray(members) || members.length === 0 || members.length > 30 || members.some(member => !member || !positiveId(member.employee_id) || !specialties.includes(member.responsibility)) ||
       new Set(members.map(member => member.employee_id)).size !== members.length || !members.some(member => member.employee_id === body.leader_id) ||
+      !members.some(member => member.responsibility === body.service_type) ||
       Object.keys(body).some(key => !['request_id','service_type','scheduled_at','scheduled_end_at','leader_id','assignments'].includes(key))) {
       return response.status(400).json({ message: "Izberi zahtevek, vrsto servisa, prihodnji termin in ekipo z enim vodjo." });
     }
@@ -80,7 +81,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
           await client.query('ROLLBACK'); return response.status(409).json({ message: 'Izbrani serviser je v tem terminu že zaseden.' });
         }
       }
-      const saved = editing ? await client.query(`UPDATE services SET service_type=$2,id_employee=$3,id_manager=$4,scheduled_at=$5,scheduled_end_at=$6,status='scheduled' WHERE id=$1 RETURNING id,id_solar_plant`, [serviceId, body.service_type, body.leader_id, sessionAccount(response).id, body.scheduled_at, body.scheduled_end_at])
+      const saved = editing ? await client.query(`UPDATE services SET service_type=$2,id_employee=$3,id_manager=$4,scheduled_at=$5,scheduled_end_at=$6,status=CASE WHEN status='in_progress' THEN 'in_progress' ELSE 'scheduled' END WHERE id=$1 RETURNING id,id_solar_plant`, [serviceId, body.service_type, body.leader_id, sessionAccount(response).id, body.scheduled_at, body.scheduled_end_at])
         : await client.query(`INSERT INTO services (id_solar_plant,id_service_request,service_type,id_employee,id_manager,urgency,status,scheduled_at,scheduled_end_at) VALUES ($1,$2,$3,$4,$5,$6,'scheduled',$7,$8) RETURNING id,id_solar_plant`, [source.id_solar_plant, requestId, body.service_type, body.leader_id, sessionAccount(response).id, source.urgency, body.scheduled_at, body.scheduled_end_at]);
       const id = saved.rows[0].id;
       // Upsert retained members to preserve their original assignment timestamp.
@@ -93,7 +94,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
       for (const removed of previous.filter(id => !members.some(member => member.employee_id === id))) await notify(client, 'employee_id', removed, id, 'removed', `S servisa #${id} ste bili odstranjeni.`);
       const owner = (await client.query('SELECT id_customer FROM solar_plants WHERE id_solar_plants=$1', [saved.rows[0].id_solar_plant])).rows[0].id_customer;
       await notify(client, 'customer_id', owner, id, editing ? 'updated' : 'scheduled', `Servis #${id}: ${editing ? 'spremenjen' : 'potrjen'} termin ${body.scheduled_at} – ${body.scheduled_end_at}.`);
-      if (requestId) await client.query("UPDATE service_requests SET status='scheduled' WHERE id=$1", [requestId]);
+      if (requestId) await client.query("UPDATE service_requests SET status='scheduled',follow_up_required=CASE WHEN $2::boolean THEN follow_up_required ELSE false END WHERE id=$1", [requestId,editing]);
       const result = await client.query(`SELECT ${scheduleColumns} FROM services s JOIN solar_plants sp ON sp.id_solar_plants=s.id_solar_plant WHERE s.id=$1`, [id]);
       await client.query('COMMIT');
       return response.status(editing ? 200 : 201).json({ service: result.rows[0] });
