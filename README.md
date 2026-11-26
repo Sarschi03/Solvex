@@ -14,6 +14,9 @@ https://github.com/lea250301/Solvex
 
 ## Prevzem projekta in CI/CD
 
+Agentska navodila, skilli, MCP in specifikacija so pripravljeni v ločenem PR
+z veje `agents`. Ta veja `frontend` vsebuje aplikacijsko izvedbo in pripadajoče teste.
+
 Fork: [Sarschi03/Solvex](https://github.com/Sarschi03/Solvex).
 Pregled MVP in petih uporabniških zgodb: [docs/07-pregled-projekta.md](docs/07-pregled-projekta.md).
 GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](docs/08-ci-cd.md).
@@ -23,7 +26,7 @@ GitHub Actions in navodila za aktivacijo Render namestitve: [docs/08-ci-cd.md](d
 
 - `lint`: ESLint preveri frontend in backend; napake ustavijo cevovod.
 - `build`: TypeScript/Vite zgradita oba dela; `application-build` vsebuje prevedeno aplikacijo in podatke za zagon. Odvisnosti se predpomnijo z npm cache.
-- `test`: 11 API testov s PostgreSQL in 7 testov React vmesnika; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
+- `test`: 20 API testov s PostgreSQL in 28 frontend testov; HTML in LCOV poročili sta v artefaktu `coverage-reports`.
 - `deploy`: samo po pushu v `main` in uspehu `lint`, `build`, `test`; prenese artefakte in objavi že prevedeni backend na Render ter frontend na Vercel. Render namesti samo izvajalne odvisnosti, Vercel uporabi `--prebuilt`; aplikaciji se ne gradita ponovno.
 
 **Javna aplikacija: [solvex-henna.vercel.app](https://solvex-henna.vercel.app)**
@@ -41,6 +44,51 @@ Za oddajo na Moodle je pripravljena [oddaja.txt](oddaja.txt) z obema povezavama.
 Frontend bo objavljen na **Vercel Hobby**, backend na **Render Free**, baza pa bo **Free PostgreSQL**. Brezplačna Render baza poteče po 30 dneh; samodejna plačljiva nadgradnja ni nastavljena. Nastavitve so v [docs/08-ci-cd.md](docs/08-ci-cd.md), prva objava frontenda pa v [docs/10-vercel-frontend.md](docs/10-vercel-frontend.md).
 
 ## Zagon
+
+### Kaj pomenijo mape in nastavitve
+
+| Pot | Namen |
+| --- | --- |
+| `frontend/src/`, `backend/src/` | Izvorna koda aplikacije; strani, komponente, hooki in API. |
+| `frontend/src/App.test.tsx`, `backend/test/` | Avtomatizirani testi; potrebni tudi za CI. |
+| `coverage/` v frontendu/backendu | Generirana HTML/LCOV poročila o pokritosti testov. Varno jih izbrišemo; `npm run test:coverage` jih ustvari znova. |
+| `dist/` v frontendu/backendu | Generirana produkcijska gradnja; `npm run build` jo ustvari znova. Za `npm start` backenda mora gradnja že obstajati. |
+| `node_modules/` | Nameščene odvisnosti. Potrebne za lokalni razvoj; po brisanju je potreben `npm ci`. |
+| `.playwright-mcp/` | Lokalni posnetki in dnevniki preverjanja brskalnika; po potrebi jih lahko izbrišemo. |
+| `.vercel/project.json` | Povezava lokalne mape s projektom Vercel; `.vercel/output/` je generiran namestitveni paket. |
+| `package.json`, `package-lock.json` | Ukazi in odvisnosti ter ponovljiva namestitev njihovih različic. |
+| `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`, `eslint.config.js` | Nastavitve TypeScripta, razvoja/gradnje, testov in linta. |
+| `database/`, `docs/`, `oddaja.txt` | Podatkovni model, podedovani SQL primeri, projektna dokumentacija in šolska oddaja. |
+| `.github/`, `.codex/`, `.agents/`, `.mcp.json`, `AGENTS.md` | CI/CD ter zahtevana navodila, varovalke, skilli in MCP za agenta. |
+
+Generirani izhodi, dnevniki, odvisnosti in lokalne skrivnosti niso namenjeni dodajanju v Git.
+
+### Nadzorna plošča in profil lastnika
+
+Po lokalnem zagonu odprite [nadzorno ploščo lastnika](http://localhost:5173/#lastnik).
+Povezava brez prijave ostaja oblikovna predloga z vzorčno fotografijo in splošnimi
+karticami. Za osebni profil na prijavni strani izberite **Lastnik** in se prijavite.
+Lokalni demo: `demo-owner@solvex.local` / `SolvexDemo123!`. Za zaposlenega izberite
+**Zaposleni**; njegova prijava še vedno odpre ločen delovni prostor.
+
+Na podlagi `docs/06-wireframes.md` so pripravljene prazne strani za elektrarne,
+trenutne servise, pretekle servise in koristne informacije. Profil prek avatarja
+zdaj prikazuje ime, shranjeno fotografijo, shematsko hišo z elektrarno in lastnikove
+zaključene servise. Fotografijo lahko zamenjate ali odstranite; shrani se v PostgreSQL.
+Prazne strani za redni pregled, prijavo okvare in priporočila so povezane z
+nadzorne plošče. Serviser ima dodatno prazen koledar.
+
+Fotografije PNG/JPEG/WebP do 5 MB se v brskalniku izrežejo in zmanjšajo na 256 × 256;
+API sprejme samo raster do 256 KB. Seja traja sedem dni in uporablja HttpOnly piškotek;
+v bazi se hrani hash žetona. `localStorage` vsebuje le nenevarno oznako za obnovo seje.
+Profil in podatki elektrarn se preverjajo na strežniku po seji, ne po ID-ju v URL-ju.
+Novi profilni API ne odpravlja zgodovinskih omejitev ostalih API-poti prevzetega projekta.
+
+Po posodobitvi kode zaženite `npm run db:migrate --prefix backend`; migracija
+`002-user-profiles-and-sessions` doda stolpce za slike in tabelo sej brez ponastavitve
+podatkov. Migracija je lokalno preverjena tudi ob ponovitvi; produkcija v tem koraku ni spreminjana.
+
+### Lokalna aplikacija
 
 Potrebujete Node.js 24, npm in zagnan Docker Desktop. Iz korenske mape:
 

@@ -108,3 +108,16 @@ CREATE TABLE service_reports (
 
 ALTER TABLE service_reports
     ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+
+-- migration: 002-user-profiles-and-sessions
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS profile_image_data TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS profile_image_data TEXT;
+
+CREATE TABLE IF NOT EXISTS account_sessions (
+    token_hash CHAR(64) PRIMARY KEY,
+    customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
+    employee_id BIGINT REFERENCES employees(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    CHECK (num_nonnulls(customer_id, employee_id) = 1)
+);
+CREATE INDEX IF NOT EXISTS account_sessions_expiry_idx ON account_sessions(expires_at);
