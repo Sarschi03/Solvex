@@ -3,7 +3,7 @@ import { LoginMosaic } from '../components/LoginMosaic'
 import './LoginPage.css'
 import type { AccountRole } from '../types'
 
-export default function RegisterPage({ role = 'customer' }: { role?: AccountRole }) {
+export default function RegisterPage({ role = 'customer' }: { role?: Exclude<AccountRole,'administrator'> }) {
   const { notice, isSubmitting, registered, register } = useRegistration(role)
   return (
     <main className="login-page registration-page">

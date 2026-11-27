@@ -2,6 +2,7 @@ import type { Router, Request, Response } from "express";
 import { inspectionCycles, refreshInspectionRecommendations } from "./customerHistory.js";
 import type { Pool, PoolClient } from "pg";
 import { requireSession, sessionAccount } from "./profiles.js";
+import { accountColumns } from "./accountAccess.js";
 import { assignedTo, positiveId, scheduleColumns } from "./assignmentAccess.js";
 
 type Member = { employee_id: string; responsibility: string };
@@ -30,7 +31,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
     const { start, end, exclude_service_id: exclude } = request.query;
     if (!interval(start, end) || (exclude !== undefined && !positiveId(exclude))) return response.status(400).json({ message: "Izberi veljaven začetek in konec termina." });
     try {
-      const employees = await pool.query('SELECT id,first_name,last_name,email,service_type FROM employees ORDER BY last_name,first_name');
+      const employees = await pool.query("SELECT e.id,e.first_name,e.last_name,e.email,e.service_type FROM employees e JOIN account_registry a ON a.employee_id=e.id AND a.enabled AND a.active_role='employee' ORDER BY e.last_name,e.first_name");
       const rows = [];
       for (const employee of employees.rows) {
         const conflicts = await pool.query(conflictSql, [employee.id, start, end, exclude ?? null]);
@@ -56,6 +57,8 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(730115)');
+      if (!(await client.query("SELECT id FROM account_registry WHERE manager_id=$1 AND enabled AND active_role='manager'",[sessionAccount(response).id])).rowCount) { await client.query('ROLLBACK'); return response.status(403).json({message:'Dostop ni dovoljen.'}); }
       if (editing) {
         const parent = (await client.query('SELECT id_service_request FROM services WHERE id=$1', [serviceId])).rows[0];
         if (parent?.id_service_request) await client.query('SELECT id FROM service_requests WHERE id=$1 FOR UPDATE', [parent.id_service_request]);
@@ -75,7 +78,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
       if (current?.id_employee && previous.length === 0) previous.push(current.id_employee);
       const ids = [...new Set([...previous, ...members.map(member => member.employee_id)])].sort((a,b) => BigInt(a) < BigInt(b) ? -1 : 1);
       for (const id of ids) await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [id]);
-      const technicians = await client.query('SELECT id,service_type FROM employees WHERE id=ANY($1::bigint[])', [members.map(member => member.employee_id)]);
+      const technicians = await client.query("SELECT e.id,e.service_type FROM employees e JOIN account_registry a ON a.employee_id=e.id AND a.enabled AND a.active_role='employee' WHERE e.id=ANY($1::bigint[])", [members.map(member => member.employee_id)]);
       if (members.some(member => !technicians.rows.some(employee => employee.id === member.employee_id && employee.service_type === member.responsibility))) { await client.query('ROLLBACK'); return response.status(400).json({ message: 'Odgovornost mora ustrezati specializaciji obstoječega serviserja.' }); }
       for (const member of members) {
         if ((await client.query(conflictSql, [member.employee_id, body.scheduled_at, body.scheduled_end_at, serviceId ?? null])).rowCount) {
@@ -109,6 +112,8 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(730115)');
+      if (!(await client.query("SELECT id FROM account_registry WHERE manager_id=$1 AND enabled AND active_role='manager'",[sessionAccount(response).id])).rowCount) { await client.query('ROLLBACK'); return response.status(403).json({message:'Dostop ni dovoljen.'}); }
       const parent = (await client.query('SELECT id_service_request FROM services WHERE id=$1', [request.params.serviceId])).rows[0];
       if (parent?.id_service_request) await client.query('SELECT id FROM service_requests WHERE id=$1 FOR UPDATE', [parent.id_service_request]);
       const service = (await client.query('SELECT * FROM services WHERE id=$1 FOR UPDATE', [request.params.serviceId])).rows[0];
@@ -139,7 +144,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
   });
   router.get('/notifications', requireSession(pool, ['customer','employee','manager']), async (_request, response) => {
     const account = sessionAccount(response);
-    const column = { customer: 'customer_id', employee: 'employee_id', manager: 'manager_id' }[account.role];
+    const column = accountColumns[account.role];
     try {
       if(account.role==='customer') await refreshInspectionRecommendations(pool);
       return response.json({ notifications: (await pool.query(`${inspectionCycles} SELECT n.id,n.service_id,n.kind,n.message,n.created_at,n.read_at FROM notifications n WHERE n.${column}=$1
@@ -152,7 +157,7 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
   router.patch('/notifications/:notificationId/read', requireSession(pool, ['customer','employee','manager']), async (request, response) => {
     if (!positiveId(request.params.notificationId)) return response.status(400).json({ message: 'ID obvestila ni veljaven.' });
     const account = sessionAccount(response);
-    const column = { customer: 'customer_id', employee: 'employee_id', manager: 'manager_id' }[account.role];
+    const column = accountColumns[account.role];
     try {
       const result = await pool.query(`UPDATE notifications SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND ${column}=$2 RETURNING id`, [request.params.notificationId,account.id]);
       return result.rowCount ? response.json({ message: 'Obvestilo je prebrano.' }) : response.status(404).json({ message: 'Obvestilo ni bilo najdeno.' });

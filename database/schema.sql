@@ -254,3 +254,58 @@ CREATE UNIQUE INDEX notifications_inspection_once ON notifications(customer_id,s
 
 -- migration: 011-recommendation-kind-length
 ALTER TABLE notifications ALTER COLUMN kind TYPE VARCHAR(40);
+
+-- migration: 012-administration-analytics
+CREATE TABLE administrators (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(254) NOT NULL UNIQUE,password_hash TEXT NOT NULL,profile_image_data TEXT
+);
+CREATE TABLE account_registry (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    customer_id BIGINT UNIQUE REFERENCES customers(id) ON DELETE RESTRICT,
+    employee_id BIGINT UNIQUE REFERENCES employees(id) ON DELETE RESTRICT,
+    manager_id BIGINT UNIQUE REFERENCES managers(id) ON DELETE RESTRICT,
+    administrator_id BIGINT UNIQUE REFERENCES administrators(id) ON DELETE RESTRICT,
+    active_role VARCHAR(20) NOT NULL CHECK(active_role IN ('customer','employee','manager','administrator')),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    CHECK(num_nonnulls(customer_id,employee_id,manager_id,administrator_id)>=1),
+    CHECK(CASE active_role WHEN 'customer' THEN customer_id WHEN 'employee' THEN employee_id
+        WHEN 'manager' THEN manager_id ELSE administrator_id END IS NOT NULL)
+);
+INSERT INTO account_registry(customer_id,active_role) SELECT id,'customer' FROM customers;
+INSERT INTO account_registry(employee_id,active_role) SELECT id,'employee' FROM employees;
+INSERT INTO account_registry(manager_id,active_role) SELECT id,'manager' FROM managers;
+CREATE FUNCTION register_account_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_TABLE_NAME='customers' THEN INSERT INTO account_registry(customer_id,active_role) VALUES(NEW.id,'customer');
+    ELSIF TG_TABLE_NAME='employees' THEN INSERT INTO account_registry(employee_id,active_role) VALUES(NEW.id,'employee');
+    ELSIF TG_TABLE_NAME='managers' THEN INSERT INTO account_registry(manager_id,active_role) VALUES(NEW.id,'manager');
+    ELSE INSERT INTO account_registry(administrator_id,active_role) VALUES(NEW.id,'administrator'); END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER register_customer AFTER INSERT ON customers FOR EACH ROW EXECUTE FUNCTION register_account_identity();
+CREATE TRIGGER register_employee AFTER INSERT ON employees FOR EACH ROW EXECUTE FUNCTION register_account_identity();
+CREATE TRIGGER register_manager AFTER INSERT ON managers FOR EACH ROW EXECUTE FUNCTION register_account_identity();
+CREATE TRIGGER register_administrator AFTER INSERT ON administrators FOR EACH ROW EXECUTE FUNCTION register_account_identity();
+ALTER TABLE account_sessions ADD COLUMN administrator_id BIGINT REFERENCES administrators(id) ON DELETE CASCADE;
+ALTER TABLE account_sessions DROP CONSTRAINT account_sessions_one_account_check;
+ALTER TABLE account_sessions ADD CONSTRAINT account_sessions_one_account_check CHECK(num_nonnulls(customer_id,employee_id,manager_id,administrator_id)=1);
+ALTER TABLE account_usernames ADD COLUMN administrator_id BIGINT UNIQUE REFERENCES administrators(id) ON DELETE CASCADE;
+ALTER TABLE account_usernames DROP CONSTRAINT account_usernames_check;
+ALTER TABLE account_usernames ADD CONSTRAINT account_usernames_check CHECK(num_nonnulls(customer_id,employee_id,manager_id,administrator_id)=1);
+CREATE TABLE administration_audit (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    actor_id BIGINT NOT NULL REFERENCES administrators(id),account_id BIGINT NOT NULL REFERENCES account_registry(id),
+    previous_role TEXT NOT NULL,new_role TEXT NOT NULL,previous_enabled BOOLEAN NOT NULL,new_enabled BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE analytics_requests (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    manager_id BIGINT NOT NULL REFERENCES managers(id),
+    date_from DATE NOT NULL,date_to DATE NOT NULL CHECK(date_to>=date_from),
+    group_by VARCHAR(30) NOT NULL CHECK(group_by IN ('manufacturer','power','installation_year')),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    generated_by BIGINT REFERENCES administrators(id),shared_at TIMESTAMPTZ,result JSONB,
+    CHECK((shared_at IS NULL AND result IS NULL) OR (shared_at IS NOT NULL AND result IS NOT NULL AND generated_by IS NOT NULL))
+);

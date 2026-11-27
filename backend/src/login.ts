@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import type { Pool } from "pg";
 import argon2 from "argon2";
+import { canSignIn } from "./accountAccess.js";
 import { startSession, type Role } from "./profiles.js";
 
 type LoginAccount = { id: string; first_name: string; last_name: string; email: string; profile_image_data: string | null; password_hash: string; role: Role; service_type: string | null };
@@ -23,10 +24,13 @@ export function installLoginRoute(router: Router, pool: Pool) {
           FROM employees e LEFT JOIN account_usernames u ON u.employee_id=e.id WHERE LOWER(e.email)=$1 OR u.username=$1
         UNION ALL
         SELECT m.id,m.first_name,m.last_name,m.email,m.profile_image_data,m.password_hash,'manager' AS role,NULL::text AS service_type
-          FROM managers m LEFT JOIN account_usernames u ON u.manager_id=m.id WHERE LOWER(m.email)=$1 OR u.username=$1`, [identifier]);
+          FROM managers m LEFT JOIN account_usernames u ON u.manager_id=m.id WHERE LOWER(m.email)=$1 OR u.username=$1
+        UNION ALL
+        SELECT a.id,a.first_name,a.last_name,a.email,a.profile_image_data,a.password_hash,'administrator' AS role,NULL::text AS service_type
+          FROM administrators a LEFT JOIN account_usernames u ON u.administrator_id=a.id WHERE LOWER(a.email)=$1 OR u.username=$1`, [identifier]);
       const matches: LoginAccount[] = [];
       for (const account of result.rows) {
-        if (await argon2.verify(account.password_hash, password)) matches.push(account);
+        if (await canSignIn(pool,account.role,account.id) && await argon2.verify(account.password_hash, password)) matches.push(account);
       }
       if (matches.length === 0) return response.status(401).json({ message: "Prijavni podatki niso pravilni." });
       // Never pick a privileged role by table order when old accounts share credentials.

@@ -11,6 +11,8 @@ import { installLoginRoute } from "./login.js";
 import { installRequestRoutes } from "./requests.js";
 import { installTechnicianRoutes } from "./technician.js";
 import { installInventoryRoutes } from "./inventory.js";
+import { canSignIn } from "./accountAccess.js";
+import { installAdministrationRoutes } from "./administration.js";
 import { installCustomerHistoryRoutes } from "./customerHistory.js";
 import { installSchedulingRoutes } from "./scheduling.js";
 import { assignedTo, leaderOf } from "./assignmentAccess.js";
@@ -44,6 +46,7 @@ installSchedulingRoutes(router, pool);
 installTechnicianRoutes(router, pool);
 installInventoryRoutes(router, pool);
 installCustomerHistoryRoutes(router, pool);
+installAdministrationRoutes(router,pool);
 
 router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
   const account = sessionAccount(response);
@@ -171,7 +174,7 @@ router.post("/employees/login", async (request, response) => {
         }
       | undefined;
 
-    if (!employee || !(await argon2.verify(employee.password_hash, password))) {
+    if (!employee || !await canSignIn(pool,"employee",employee.id) || !(await argon2.verify(employee.password_hash, password))) {
       return response.status(401).json({
         message: "E-poštni naslov ali geslo ni pravilno.",
       });
