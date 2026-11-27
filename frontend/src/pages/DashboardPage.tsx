@@ -284,6 +284,7 @@ function DashboardPage({ employee, account, onAccountChange, onLogout }: Dashboa
             outcome: formData.get('outcome') || null,
             fault_found: formData.get('fault_found') === 'yes' ? true : formData.get('fault_found') === 'no' ? false : null,
             fault_cause: formData.get('fault_cause') || null,
+            customer_summary: formData.get('customer_summary') || null,
             parts_used: JSON.parse(String(formData.get('parts_used') || '[]')),
           }),
         },

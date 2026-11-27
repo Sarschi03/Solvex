@@ -11,6 +11,7 @@ import { installLoginRoute } from "./login.js";
 import { installRequestRoutes } from "./requests.js";
 import { installTechnicianRoutes } from "./technician.js";
 import { installInventoryRoutes } from "./inventory.js";
+import { installCustomerHistoryRoutes } from "./customerHistory.js";
 import { installSchedulingRoutes } from "./scheduling.js";
 import { assignedTo, leaderOf } from "./assignmentAccess.js";
 
@@ -42,6 +43,7 @@ installRequestRoutes(router, pool);
 installSchedulingRoutes(router, pool);
 installTechnicianRoutes(router, pool);
 installInventoryRoutes(router, pool);
+installCustomerHistoryRoutes(router, pool);
 
 router.get("/services", requireSession(pool, ["employee", "manager"]), async (_request, response) => {
   const account = sessionAccount(response);

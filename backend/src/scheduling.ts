@@ -1,4 +1,5 @@
 import type { Router, Request, Response } from "express";
+import { inspectionCycles, refreshInspectionRecommendations } from "./customerHistory.js";
 import type { Pool, PoolClient } from "pg";
 import { requireSession, sessionAccount } from "./profiles.js";
 import { assignedTo, positiveId, scheduleColumns } from "./assignmentAccess.js";
@@ -139,7 +140,13 @@ export function installSchedulingRoutes(router: Router, pool: Pool) {
   router.get('/notifications', requireSession(pool, ['customer','employee','manager']), async (_request, response) => {
     const account = sessionAccount(response);
     const column = { customer: 'customer_id', employee: 'employee_id', manager: 'manager_id' }[account.role];
-    try { return response.json({ notifications: (await pool.query(`SELECT id,service_id,kind,message,created_at,read_at FROM notifications WHERE ${column}=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, [account.id])).rows }); }
+    try {
+      if(account.role==='customer') await refreshInspectionRecommendations(pool);
+      return response.json({ notifications: (await pool.query(`${inspectionCycles} SELECT n.id,n.service_id,n.kind,n.message,n.created_at,n.read_at FROM notifications n WHERE n.${column}=$1
+        AND (n.kind<>'inspection_recommendation' OR (EXISTS(SELECT 1 FROM customers WHERE id=$1 AND recommendations_enabled)
+        AND EXISTS(SELECT 1 FROM cycles WHERE service_id=n.service_id AND id_customer=$1)))
+        ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, [account.id])).rows });
+    }
     catch { return response.status(500).json({ message: 'Obvestil ni bilo mogoče naložiti.' }); }
   });
   router.patch('/notifications/:notificationId/read', requireSession(pool, ['customer','employee','manager']), async (request, response) => {

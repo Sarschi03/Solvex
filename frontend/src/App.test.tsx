@@ -207,7 +207,7 @@ describe('Nadzorna plošča prijavljenega lastnika', () => {
   const account = { id: '7', first_name: 'Ana', last_name: 'Novak', email: 'ana@test.si', role: 'customer', profile_image_data: null }
   function restoreOwner() {
     localStorage.setItem('solvex:session', 'true')
-    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(Response.json(url.endsWith('/account/profile') ? { account, plants: [], services: [] } : { account })))
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(Response.json(url.endsWith('/plants') ? {plants:[]} : url.endsWith('/account/recommendations') ? {enabled:true,recommendations:[]} : url.endsWith('/account/profile') ? { account, plants: [], services: [] } : { account })))
     vi.stubGlobal('fetch', fetchMock)
     return fetchMock
   }
@@ -217,10 +217,12 @@ describe('Nadzorna plošča prijavljenega lastnika', () => {
     render(<App />)
     const user = userEvent.setup()
     expect(await screen.findByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })).toBeTruthy()
-    for (const name of ['Moje elektrarne', 'Pretekli servisi', 'Koristne informacije']) {
+    for (const name of ['Moje elektrarne', 'Koristne informacije']) {
       await user.click(screen.getByRole('button', { name }))
       expect((await screen.findByRole('region', { name })).childElementCount).toBe(0)
     }
+    await user.click(screen.getByRole('button',{name:'Pretekli servisi'}))
+    expect(await screen.findByText('Najprej dodaj svojo elektrarno.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Profil' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Odpri profil' }))
     expect(await screen.findByRole('heading', { name: 'Moj profil' })).toBeTruthy()
@@ -229,7 +231,7 @@ describe('Nadzorna plošča prijavljenega lastnika', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.anything())
   })
 
-  it('povezave odprejo obrazce, priporočila ostanejo predloga in iskanje filtrira vsebino', async () => {
+  it('povezave odprejo obrazce in priporočila, iskanje filtrira vsebino', async () => {
     window.history.replaceState(null, '', '#lastnik')
     restoreOwner()
     render(<App />)
@@ -242,7 +244,7 @@ describe('Nadzorna plošča prijavljenega lastnika', () => {
     expect(await screen.findByRole('heading', { name: 'Prijavi okvaro' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Domov' }))
     await user.click(await screen.findByRole('link', { name: /Redni pregledi, manj skrbi/ }))
-    expect((await screen.findByRole('region', { name: 'Priporočila' })).childElementCount).toBe(0)
+    expect(await screen.findByRole('checkbox',{name:'Želim priporočila za redne preglede'})).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Domov' }))
     await screen.findByRole('heading', { name: /Kakšna je pa tvoja energija danes/ })
     await user.type(screen.getByRole('searchbox', { name: 'Išči po nadzorni plošči' }), 'panele')

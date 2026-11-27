@@ -242,3 +242,15 @@ CREATE UNIQUE INDEX inventory_alerts_one_open ON inventory_alerts(part_id) WHERE
 ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
     CHECK (kind IN ('scheduled','updated','removed','cancelled','completed','low_stock'));
+
+-- migration: 010-customer-history-recommendations
+ALTER TABLE customers ADD COLUMN recommendations_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE service_reports ADD COLUMN customer_summary TEXT CHECK (length(customer_summary)<=4000);
+ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
+    CHECK (kind IN ('scheduled','updated','removed','cancelled','completed','low_stock','inspection_recommendation'));
+CREATE UNIQUE INDEX notifications_inspection_once ON notifications(customer_id,service_id)
+    WHERE kind='inspection_recommendation';
+
+-- migration: 011-recommendation-kind-length
+ALTER TABLE notifications ALTER COLUMN kind TYPE VARCHAR(40);
