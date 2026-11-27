@@ -111,6 +111,12 @@ brez internih servisnih zapisnikov.
 
 ## Dopolnitev: oddaja in ocena zahtevkov
 
+Migracija 009 doda katalog `inventory_parts` s SKU, količino, mejo in aktivnostjo,
+revizijski dnevnik `stock_movements` ter epizode nizke zaloge `inventory_alerts`.
+Unikatna povezava poročilo/del in `service_reports.inventory_posted_at` varujeta
+pred dvojno porabo. Zaloga, oddaja poročila in zaključek servisa se zapišejo v isti
+transakciji. Podrobnosti: [spec 007](specs/007-parts-inventory/spec.md).
+
 Migracija 007 uvede `service_assignments` kot M:N povezavo med servisom in člani,
 z odgovornostjo, vodjo in časom dodelitve. `services.id_employee` ostane združljiva
 referenca na vodjo. `scheduled_end_at` določa konec termina/rok, `notifications`

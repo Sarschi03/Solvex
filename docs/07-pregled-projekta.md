@@ -24,6 +24,11 @@ merilo trenutne implementacije; stanje in dokazila so v teh specifikacijah.
 
 ## Implementirane funkcionalnosti MVP
 
+Razvojna veja za US-10 poveže poročila s katalogom delov, transakcijsko porabo,
+vodjevim pregledom in opozorili nizke zaloge. Dejanska pravila, omejitve ter
+preverjanja so v [spec 007](specs/007-parts-inventory/spec.md). Spodnje besedilo
+ostaja zgodovinski pregled prevzetega projekta, ne stanje te razvojne veje.
+
 Deluje prijava zaposlenega z e-pošto in geslom (Argon2). Serviserjev vmesnik prikazuje
 servise, njihove podrobnosti, lokacijo, stranko, termin, status in nujnost. Omogoča
 iskanje, razvrščanje in pripenjanje servisov, ki se shrani v lokalno shrambo brskalnika.

@@ -17,10 +17,11 @@ describe('Serviserjev delovni tok',()=>{
   })
   it('strukturirana polja zapišejo dele v obrazec brez JSON urejevalnika',async()=>{
     let sent:FormData|undefined
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({parts:[{id:'5',sku:'FUSE',name:'Varovalka',manufacturer:'Test',quantity_on_hand:10,low_stock_threshold:2,low_stock:false}]})))
     render(<form onSubmit={event=>{event.preventDefault();sent=new FormData(event.currentTarget)}}><ReportStructuredFields report={null}/><button type="submit">Preveri</button></form>)
     const user=userEvent.setup();await user.selectOptions(screen.getByLabelText('Stanje elektrarne po posegu'),'operational');await user.selectOptions(screen.getByLabelText('Rezultat servisa'),'resolved');await user.selectOptions(screen.getByLabelText('Je bila ugotovljena napaka?'),'no')
-    await user.click(screen.getByRole('button',{name:'Dodaj del'}));await user.type(screen.getByLabelText('Naziv dela'),'Varovalka');await user.type(screen.getByLabelText('Proizvajalec'),'Test');await user.click(screen.getByRole('button',{name:'Preveri'}))
-    expect(sent?.get('outcome')).toBe('resolved');expect(JSON.parse(String(sent?.get('parts_used')))[0]).toMatchObject({name:'Varovalka',manufacturer:'Test',quantity:1,replaced:true})
+    await user.click(screen.getByRole('button',{name:'Dodaj del'}));await user.selectOptions(await screen.findByLabelText('Del iz zaloge'),'5');await user.click(screen.getByRole('button',{name:'Preveri'}))
+    expect(sent?.get('outcome')).toBe('resolved');expect(JSON.parse(String(sent?.get('parts_used')))[0]).toMatchObject({inventory_part_id:'5',name:'Varovalka',manufacturer:'Test',quantity:1,replaced:true})
   })
   it('podrobnosti prikažejo podatke elektrarne in dejansko zgodovino delov',async()=>{
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({service:{...service,assignments:[],can_report:true,request_description:'Napaka',fault_type:'Razsmernik'},plant:{name:'Dom',manufacturer:'Solar',installation_year:2020,installed_capacity_kw:'10',panel_count:20,has_battery:false},recent_history:[{id:'9',completed_at:'2026-01-01T10:00:00Z',work_summary:'Menjava',outcome:'resolved',parts_used:[{name:'Varovalka',manufacturer:'Test',quantity:1,replaced:true,installed_on:'2020-01-01'}]}]})))

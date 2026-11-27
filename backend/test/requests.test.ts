@@ -280,8 +280,9 @@ describe('US-05/06/07: podrobnosti, strukturirana poročila in zaključek',()=>{
   let followerId:string;
   let followerCookie:string;
   let day=1;
-  const complete={work_summary:'Pregled in popravilo',performed_at:'2020-01-01T10:00:00Z',plant_condition:'operational',outcome:'resolved',fault_found:true,fault_cause:'Slab kontakt',parts_used:[{name:'Varovalka',manufacturer:'Testni proizvajalec',quantity:2,replaced:true,installed_on:'2020-01-01'}]};
+  const complete={work_summary:'Pregled in popravilo',performed_at:'2020-01-01T10:00:00Z',plant_condition:'operational',outcome:'resolved',fault_found:true,fault_cause:'Slab kontakt',parts_used:[{inventory_part_id:'',name:'Varovalka',manufacturer:'Testni proizvajalec',quantity:2,replaced:true,installed_on:'2020-01-01'}]};
   before(async()=>{
+    complete.parts_used[0].inventory_part_id=(await pool.query("INSERT INTO inventory_parts (sku,name,manufacturer,quantity_on_hand,low_stock_threshold) VALUES ('TEST-FUSE','Varovalka','Testni proizvajalec',1000,5) RETURNING id")).rows[0].id;
     const account=await call('/employees/register',undefined,'POST',{firstName:'Član',lastName:'Ekipe',email:'report-member@test.si',password:'ReportTest123!',phone:'000',serviceType:'electrical'});
     followerId=account.body.account.id;
     followerCookie=(await call('/auth/login',undefined,'POST',{identifier:'report-member@test.si',password:'ReportTest123!'})).cookie!;
