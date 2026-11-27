@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import type { Pool } from "pg";
 import argon2 from "argon2";
+import { canSignIn } from "./accountAccess.js";
 import { startSession } from "./profiles.js";
 
 // Open staff registration is an explicit policy for this school project.
@@ -43,7 +44,7 @@ export function installStaffAccountRoutes(router: Router, pool: Pool) {
     try {
       const result = await pool.query("SELECT id,first_name,last_name,email,password_hash,profile_image_data FROM managers WHERE email=$1", [email.trim().toLowerCase()]);
       const manager = result.rows[0];
-      if (!manager || !(await argon2.verify(manager.password_hash, password))) return response.status(401).json({ message: "E-poštni naslov ali geslo ni pravilno." });
+      if (!manager || !await canSignIn(pool,"manager",manager.id) || !(await argon2.verify(manager.password_hash, password))) return response.status(401).json({ message: "E-poštni naslov ali geslo ni pravilno." });
       await startSession(request, response, pool, "manager", manager.id);
       return response.json({ account: { id: manager.id, first_name: manager.first_name, last_name: manager.last_name, email: manager.email, profile_image_data: manager.profile_image_data, role: "manager" } });
     } catch (error) {

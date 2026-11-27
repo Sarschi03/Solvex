@@ -2,7 +2,7 @@ import { useState, type SubmitEvent } from 'react'
 import { apiBase } from '../lib/api'
 import type { AccountRole } from '../types'
 
-export function useRegistration(role: AccountRole = 'customer') {
+export function useRegistration(role: Exclude<AccountRole, 'administrator'> = 'customer') {
   const [notice, setNotice] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [registered, setRegistered] = useState(false)

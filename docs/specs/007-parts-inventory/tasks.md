@@ -11,4 +11,5 @@
 - [x] PostgreSQL testi konkurence, rollbacka, pravic in starih poročil.
 - [x] React testi in Playwright MCP dejanskega toka, namizni/mobilni pregled.
 - [x] Lint/test/build obeh delov; 146 testov skupno.
-- [ ] Push/PR za zalogo in produkcijska migracija nista del objavljenega prvega PR-ja.
+- [x] Po dodatni potrditvi objavljen [PR #4](https://github.com/Sarschi03/Solvex/pull/4).
+- [ ] Produkcijska migracija in namestitev nista izvedeni.

@@ -111,6 +111,13 @@ brez internih servisnih zapisnikov.
 
 ## Dopolnitev: oddaja in ocena zahtevkov
 
+Migraciji 010/011 dodata javni povzetek poročila, lastnikovo nastavitev priporočil
+in enkratna letna obvestila. Migracija 012 uvede administratorski profil,
+`account_registry` z aktivno vlogo in stanjem, audit sprememb in `analytics_requests`
+s posredovanim posnetkom analize. Obstoječi profili in reference se ne brišejo.
+Pravila: [spec 008](specs/008-customer-history-recommendations/spec.md) in
+[spec 009](specs/009-administration-analytics/spec.md).
+
 Migracija 009 doda katalog `inventory_parts` s SKU, količino, mejo in aktivnostjo,
 revizijski dnevnik `stock_movements` ter epizode nizke zaloge `inventory_alerts`.
 Unikatna povezava poročilo/del in `service_reports.inventory_posted_at` varujeta

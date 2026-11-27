@@ -8,6 +8,7 @@ import ProfilePage from './ProfilePage'
 import SchedulingPage from './SchedulingPage'
 import CalendarPage from './CalendarPage'
 import InventoryPage from './InventoryPage'
+import AnalyticsPage from './AnalyticsPage'
 import { ReportSummary } from '../components/ReportSummary'
 import './DashboardPage.css'
 import './ManagerDashboardPage.css'
@@ -17,6 +18,7 @@ const navigation = [
   ['employees', 'Serviserji', 'plants'], ['reports', 'Oddana poročila', 'information'],
   ['calendar', 'Koledar', 'history'], ['inventory', 'Zaloga', 'plants'],
   ['planning', 'Razporeditev', 'services'],
+  ['analytics', 'Analize', 'information'],
 ] as const
 const labels: Record<string, string> = { cleaning: 'Čiščenje', electrical: 'Elektro servis', installer: 'Montaža', planned: 'Načrtovan', scheduled: 'Dogovorjen', in_progress: 'V teku', completed: 'Zaključen', cancelled: 'Preklican', submitted: 'Oddan', reviewing: 'V pregledu', rejected: 'Zavrnjen', fault_report: 'Prijava okvare', regular_inspection: 'Redni pregled', nujno: 'Nujno', resno: 'Resno', standardno: 'Standardno' }
 const label = (value: string) => labels[value] ?? value
@@ -39,7 +41,7 @@ export default function ManagerDashboardPage({ account, onAccountChange, onLogou
       <button className="sidebar-logout" type="button" aria-label="Odjava" title="Odjava" onClick={onLogout}><DashboardIcon name="logout" /></button>
     </aside>
     <DashboardHeader isProfile={view === 'profile'} onProfile={() => navigate('profile')} profileImage={account.profile_image_data} searchValue={search} searchLabel="Išči po pregledu vodje" onSearch={setSearch} />
-    {view === 'profile' ? <ProfilePage account={account} onAccountChange={onAccountChange} /> : view === 'planning' ? <SchedulingPage requestId={planningRequestId} /> : view === 'calendar' ? <CalendarPage /> : view === 'inventory' ? <InventoryPage /> : <section className="dashboard-content manager-content">
+    {view === 'profile' ? <ProfilePage account={account} onAccountChange={onAccountChange} /> : view === 'analytics' ? <AnalyticsPage/> : view === 'planning' ? <SchedulingPage requestId={planningRequestId} /> : view === 'calendar' ? <CalendarPage /> : view === 'inventory' ? <InventoryPage /> : <section className="dashboard-content manager-content">
       <h1>{view === 'overview' ? `Dober dan, ${account.first_name}.` : navigation.find(([id]) => id === view)?.[1]}</h1>
       {view === 'overview' && <p>Pregled servisne ekipe in dela.</p>}
       {loading && <p role="status">Nalaganje podatkov ...</p>}

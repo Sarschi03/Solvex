@@ -13,6 +13,7 @@
     "db:seed:demo": "node scripts/seed-demo.mjs",
     "db:seed:accounts": "node scripts/seed-accounts.mjs",
     "db:seed:inventory": "node scripts/seed-inventory.mjs",
+    "db:seed:admin": "node scripts/seed-admin.mjs",
     "inventory:adjust": "node scripts/inventory-adjust.mjs",
     "test:coverage": "c8 --include=\"src/**\" --exclude=\"src/server.ts\" --reporter=text --reporter=lcov --reporter=html tsx --test test/*.test.ts"
   },

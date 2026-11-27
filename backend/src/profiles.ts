@@ -2,8 +2,9 @@ import type { Request, Response, Router, RequestHandler } from "express";
 import type { Pool } from "pg";
 import { createHash, randomBytes } from "node:crypto";
 import argon2 from "argon2";
+import { accountColumns, accountTables, canSignIn } from "./accountAccess.js";
 
-export type Role = "customer" | "employee" | "manager";
+export type Role = "customer" | "employee" | "manager" | "administrator";
 export type Account = { id: string; first_name: string; last_name: string; email: string; profile_image_data: string | null; role: Role; service_type?: string };
 const cookieName = "solvex_session";
 const sessionSeconds = 60 * 60 * 24 * 7;
@@ -20,7 +21,8 @@ function tokenHash(request: Request) {
 export async function startSession(request: Request, response: Response, pool: Pool, role: Role, id: string) {
   const token = randomBytes(32).toString("hex");
   const hash = createHash("sha256").update(token).digest("hex");
-  const column = { customer: "customer_id", employee: "employee_id", manager: "manager_id" }[role];
+  const column = accountColumns[role];
+  if (!await canSignIn(pool,role,id)) throw new Error("Account access is disabled.");
   await pool.query(`INSERT INTO account_sessions (token_hash, ${column}, expires_at) VALUES ($1, $2, NOW() + INTERVAL '7 days')`, [hash, id]);
   response.cookie(cookieName, token, { ...cookieOptions(request), maxAge: sessionSeconds * 1000 });
 }
@@ -28,11 +30,12 @@ export async function startSession(request: Request, response: Response, pool: P
 export async function getAccount(request: Request, pool: Pool): Promise<Account | null> {
   const hash = tokenHash(request);
   if (!hash) return null;
-  const session = await pool.query("SELECT customer_id, employee_id, manager_id FROM account_sessions WHERE token_hash = $1 AND expires_at > NOW()", [hash]);
+  const session = await pool.query("SELECT customer_id, employee_id, manager_id, administrator_id FROM account_sessions WHERE token_hash = $1 AND expires_at > NOW()", [hash]);
   if (!session.rows[0]) return null;
-  const role: Role = session.rows[0].customer_id ? "customer" : session.rows[0].employee_id ? "employee" : "manager";
-  const id = session.rows[0].customer_id ?? session.rows[0].employee_id ?? session.rows[0].manager_id;
-  const table = { customer: "customers", employee: "employees", manager: "managers" }[role];
+  const role: Role = session.rows[0].customer_id ? "customer" : session.rows[0].employee_id ? "employee" : session.rows[0].manager_id ? "manager" : "administrator";
+  const id = session.rows[0].customer_id ?? session.rows[0].employee_id ?? session.rows[0].manager_id ?? session.rows[0].administrator_id;
+  if (!await canSignIn(pool,role,id)) return null;
+  const table = accountTables[role];
   const extra = role === "employee" ? ", service_type" : "";
   const result = await pool.query(`SELECT id, first_name, last_name, email, profile_image_data${extra} FROM ${table} WHERE id = $1`, [id]);
   return result.rows[0] ? { ...result.rows[0], role } : null;
@@ -83,7 +86,7 @@ export function installProfileRoutes(router: Router, pool: Pool) {
     try {
       const result = await pool.query("SELECT id, first_name, last_name, email, password_hash, profile_image_data FROM customers WHERE email = $1", [email.trim().toLowerCase()]);
       const customer = result.rows[0];
-      if (!customer || !(await argon2.verify(customer.password_hash, password))) return response.status(401).json({ message: "E-poštni naslov ali geslo ni pravilno." });
+      if (!customer || !await canSignIn(pool,"customer",customer.id) || !(await argon2.verify(customer.password_hash, password))) return response.status(401).json({ message: "E-poštni naslov ali geslo ni pravilno." });
       await startSession(request, response, pool, "customer", customer.id);
       return response.json({ account: { id: customer.id, first_name: customer.first_name, last_name: customer.last_name, email: customer.email, profile_image_data: customer.profile_image_data, role: "customer" } });
     } catch (error) {
@@ -138,7 +141,7 @@ export function installProfileRoutes(router: Router, pool: Pool) {
       if (!account) return response.status(401).json({ message: "Za spremembo fotografije se prijavi." });
       const image: unknown = request.body?.image;
       if (!validImage(image)) return response.status(400).json({ message: "Izberi PNG, JPEG ali WebP sliko do 256 KB." });
-      const table = { customer: "customers", employee: "employees", manager: "managers" }[account.role];
+      const table = accountTables[account.role];
       await pool.query(`UPDATE ${table} SET profile_image_data = $1 WHERE id = $2`, [image, account.id]);
       return response.json({ account: { ...account, profile_image_data: image } });
     } catch {

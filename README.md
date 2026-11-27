@@ -247,6 +247,16 @@ v [PR #3](https://github.com/Sarschi03/Solvex/pull/3). Zaloga je pripravljena lo
 
 ## Agentno programiranje
 
+### Administracija in analize
+
+Po `npm run db:migrate --prefix backend` lokalni šolski račun pripravi
+`npm run db:seed:admin --prefix backend`: `admin` / `geslo123`.
+Prijava odpre administracijo računov, katalog delov, audit in zahtevane analize.
+Sprememba vloge/deaktivacija prekliče seje in ohrani povezano zgodovino.
+Vodja na strani **Analize** zahteva obdobje/skupino; administrator pripravi
+in posreduje razpredelnico, ki je nato vidna vlagatelju. US-13 stikala so po
+dogovoru odložena. [Pravila in dokazila](docs/specs/009-administration-analytics/spec.md).
+
 Lastnikovi strani **Pretekli servisi** in **Priporočila** sta povezani s pravimi
 podatki. Zgodovina omogoča izbor elektrarne in prikaže javni povzetek brez
 internih poročil. Letni predlogi temeljijo samo na opravljenih rednih pregledih;
